@@ -1,0 +1,76 @@
+# MetaKube hyperparameters — all paper defaults (Appendix A.3)
+
+epmn:
+  max_episodes: 5000
+  pattern_threshold: 0.85       # θ_sim: similarity threshold for pattern formation
+  retrieval_K: 10               # top-K memories retrieved
+  temporal_decay_days: 30       # τ_r: recency decay constant
+  lambda_mix: 0.7               # λ: weight between similarity and recency (Eq 2)
+  pattern_min_size: 3           # θ_pattern: min episodes to form a pattern
+  embedding_model: "all-MiniLM-L6-v2"  # toy; swap to "all-mpnet-base-v2" for full
+
+meta_controller:
+  tau_init: 0.75                # τ_0: initial confidence threshold
+  eta_meta: 0.01                # η_meta: meta-learning rate (Eq 10)
+  xi: 0.6                       # ξ: error vs latency trade-off weight (Eq 11)
+  confidence_weights:           # ζ exponents in Eq 15
+    similarity: 1.0
+    relevance: 0.8
+    reliability: 0.6
+
+kubegraph:
+  max_hops: 3
+  priority_weights:             # α1, α2, α3 in Eq 5
+    prior: 0.5
+    path_score: 0.3
+    novelty: 0.2
+  node_types:
+    - Pod
+    - Service
+    - Node
+    - Deployment
+    - ConfigMap
+    - Secret
+    - PersistentVolume
+    - Namespace
+    - Ingress
+    - DaemonSet
+    - StatefulSet
+    - ReplicaSet
+  edge_types:
+    - depends_on
+    - manages
+    - exposes
+    - mounts
+    - schedules_on
+    - belongs_to
+    - routes_to
+    - causes
+
+kubellm:
+  model_id: "Qwen/Qwen3-8B-Instruct"
+  load_in_4bit: true
+  max_new_tokens: 1024
+  max_context_length: 8192
+  lora_rank: 64                 # reduced from paper's 256 for 8GB VRAM
+  lora_alpha: 128
+  lora_dropout: 0.05
+  model_path: "/ai-data/models/kubellm"
+
+sft:
+  dataset_path: "/ai-data/datasets/kfrd"
+  num_epochs: 5
+  batch_size: 4                 # reduced for 8GB VRAM
+  learning_rate: 5.0e-5
+  warmup_ratio: 0.01
+  seed: 42
+
+ollama:
+  model: "gemma4:e2b"
+  base_url: "http://localhost:11434"
+  max_tokens: 1024
+
+eval:
+  aiopslab_path: "/ai-data/aoi/AIOpsLab"
+  results_path: "/ai-data/datasets/metakube_results"
+  gpt_judge_model: "gpt-4o"    # for automated scoring

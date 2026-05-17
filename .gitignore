@@ -1,0 +1,40 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Data / models (stored in /ai-data, not repo)
+/ai-data/
+*.safetensors
+*.bin
+*.gguf
+*.pt
+*.pth
+
+# Results (large JSON)
+/ai-data/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Env
+.env
+*.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Sentence-transformers cache
+sentence_transformers_cache/
