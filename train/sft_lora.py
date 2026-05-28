@@ -4,13 +4,63 @@ from __future__ import annotations
 import argparse
 import inspect
 import json
+from pathlib import Path
 from loguru import logger
 import yaml
 
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+DEFAULT_SFT_CONFIG = {
+    "model_id": "Qwen/Qwen3-8B-Instruct",
+    "dataset_path": "data/datasets/kfrd/kfrd_sft.json",
+    "output_dir": "data/models/kubellm",
+    "lora_rank": 64,
+    "lora_alpha": None,
+    "lora_dropout": 0.05,
+    "target_modules": ["q_proj", "k_proj", "v_proj", "o_proj"],
+    "num_epochs": 5,
+    "batch_size": 1,
+    "gradient_accumulation_steps": 8,
+    "learning_rate": 5e-5,
+    "warmup_ratio": 0.01,
+    "max_length": 1024,
+    "precision": "auto",
+    "load_in_4bit": True,
+    "device_map": "auto",
+    "gradient_checkpointing": True,
+    "eval_strategy": "epoch",
+    "save_strategy": "epoch",
+    "load_best_model_at_end": True,
+    "logging_steps": 10,
+    "dataloader_pin_memory": False,
+    "seed": 42,
+}
+
+
+def resolve_repo_path(path: str, must_exist: bool = False) -> Path:
+    candidate = Path(path).expanduser()
+    if candidate.is_absolute():
+        return candidate
+    if candidate.exists():
+        return candidate
+    repo_candidate = REPO_ROOT / candidate
+    if must_exist or repo_candidate.exists():
+        return repo_candidate
+    return candidate
+
+
 def load_sft_config(path: str = "config/config.yaml") -> dict:
-    with open(path) as f:
-        return yaml.safe_load(f).get("sft", {})
+    cfg = DEFAULT_SFT_CONFIG.copy()
+    config_path = resolve_repo_path(path, must_exist=True)
+    if not config_path.exists():
+        logger.warning(f"[SFT] config not found at {path}; using built-in defaults plus CLI overrides")
+        return cfg
+    with open(config_path) as f:
+        loaded = yaml.safe_load(f) or {}
+    cfg.update(loaded.get("sft", {}))
+    return cfg
 
 
 def resolve_precision(precision: str):
@@ -70,6 +120,9 @@ def run_sft(
         lora_alpha = 2 * lora_rank
     if target_modules is None:
         target_modules = ["q_proj", "k_proj", "v_proj", "o_proj"]
+
+    dataset_path = str(resolve_repo_path(dataset_path, must_exist=True))
+    output_dir = str(resolve_repo_path(output_dir, must_exist=False))
 
     logger.info(f"[SFT] loading dataset from {dataset_path}")
     with open(dataset_path) as f:
