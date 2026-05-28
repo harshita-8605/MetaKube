@@ -111,7 +111,7 @@ def run_sft(
     import torch
     from transformers import (
         AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig,
-        TrainingArguments, Trainer, DataCollatorForLanguageModeling,
+        TrainingArguments, Trainer,
     )
     from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training, TaskType
     from datasets import Dataset
@@ -200,6 +200,27 @@ def run_sft(
     train_tok = train_ds.map(tokenize, batched=True, remove_columns=["text"])
     eval_tok = eval_ds.map(tokenize, batched=True, remove_columns=["text"])
 
+    class CausalLMCollator:
+        """Pad input tensors and labels consistently for causal LM training."""
+
+        def __init__(self, tokenizer):
+            self.tokenizer = tokenizer
+
+        def __call__(self, features: list[dict]) -> dict:
+            features = [dict(feature) for feature in features]
+            labels = [feature.pop("labels") for feature in features]
+            batch = self.tokenizer.pad(features, padding=True, return_tensors="pt")
+
+            max_len = batch["input_ids"].shape[1]
+            padded_labels = []
+            for label in labels:
+                padded = label[:max_len] + [-100] * max(0, max_len - len(label))
+                padded_labels.append(padded)
+
+            import torch
+            batch["labels"] = torch.tensor(padded_labels, dtype=torch.long)
+            return batch
+
     training_kwargs = {
         "output_dir": output_dir,
         "num_train_epochs": num_epochs,
@@ -230,7 +251,7 @@ def run_sft(
         args=args,
         train_dataset=train_tok,
         eval_dataset=eval_tok,
-        data_collator=DataCollatorForLanguageModeling(tokenizer, mlm=False),
+        data_collator=CausalLMCollator(tokenizer),
     )
 
     logger.info("[SFT] training start")
