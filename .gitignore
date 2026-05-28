@@ -26,6 +26,10 @@ build/
 .env
 *.env
 
+# Local Codex/project memory (never commit)
+.codex_memory/
+.project_state/
+
 # IDE
 .idea/
 .vscode/
