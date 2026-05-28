@@ -58,11 +58,33 @@ kubellm:
   model_path: "/ai-data/models/kubellm"
 
 sft:
-  dataset_path: "/ai-data/datasets/kfrd"
+  # Central training defaults. Override any of these from train/sft_lora.py CLI.
+  model_id: "Qwen/Qwen3-8B-Instruct"
+  dataset_path: "data/datasets/kfrd/kfrd_sft.json"
+  output_dir: "data/models/kubellm"
   num_epochs: 5
-  batch_size: 4                 # reduced for 8GB VRAM
+  batch_size: 1
+  gradient_accumulation_steps: 8
   learning_rate: 5.0e-5
   warmup_ratio: 0.01
+  max_length: 1024
+  precision: "auto"             # auto | fp16 | bf16 | fp32
+  load_in_4bit: true            # QLoRA when true; regular LoRA when false
+  device_map: "auto"
+  gradient_checkpointing: true
+  lora_rank: 64
+  lora_alpha: null              # null => 2 * lora_rank
+  lora_dropout: 0.05
+  target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+  eval_strategy: "epoch"
+  save_strategy: "epoch"
+  load_best_model_at_end: true
+  logging_steps: 10
+  dataloader_pin_memory: false
   seed: 42
 
 ollama:

@@ -6,6 +6,26 @@ from loguru import logger
 from .base import KubeLLMBase
 from epmn.memory import EpisodicMemory, PatternAbstraction
 
+
+def _resolve_precision(precision: str):
+    import torch
+
+    precision = precision.lower()
+    if precision == "auto":
+        if torch.cuda.is_available() and torch.cuda.is_bf16_supported():
+            precision = "bf16"
+        elif torch.cuda.is_available():
+            precision = "fp16"
+        else:
+            precision = "fp32"
+    if precision not in {"fp16", "bf16", "fp32"}:
+        raise ValueError(f"Unsupported precision: {precision}")
+    return {
+        "bf16": torch.bfloat16,
+        "fp16": torch.float16,
+        "fp32": torch.float32,
+    }[precision], precision
+
 INTUITIVE_SYSTEM = """You are KubeLLM, an expert Kubernetes fault diagnosis system.
 You have access to historical resolution patterns from episodic memory.
 Provide rapid, accurate diagnosis grounded in the provided patterns.
@@ -51,16 +71,20 @@ class QwenKubeLLM(KubeLLMBase):
         load_in_4bit: bool = True,
         lora_path: str | None = None,
         max_new_tokens: int = 1024,
+        precision: str = "auto",
+        device_map: str = "auto",
     ):
         logger.info(f"[QwenKubeLLM] loading {model_id} (4bit={load_in_4bit})")
-        import torch
         from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+
+        compute_dtype, resolved_precision = _resolve_precision(precision)
+        logger.info(f"[QwenKubeLLM] precision={resolved_precision}")
 
         bnb_config = None
         if load_in_4bit:
             bnb_config = BitsAndBytesConfig(
                 load_in_4bit=True,
-                bnb_4bit_compute_dtype=torch.bfloat16,
+                bnb_4bit_compute_dtype=compute_dtype,
                 bnb_4bit_use_double_quant=True,
                 bnb_4bit_quant_type="nf4",
             )
@@ -69,7 +93,7 @@ class QwenKubeLLM(KubeLLMBase):
         self.model = AutoModelForCausalLM.from_pretrained(
             model_id,
             quantization_config=bnb_config,
-            device_map="auto",
+            device_map=device_map,
             trust_remote_code=True,
         )
 

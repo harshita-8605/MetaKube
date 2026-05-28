@@ -7,6 +7,7 @@ Paper uses 7,000 samples: 5,000 SFT + 2,000 eval.
 from __future__ import annotations
 import json
 import random
+import re
 import time
 from pathlib import Path
 
@@ -376,6 +377,22 @@ NAMESPACE_VARIANTS = ["production", "staging", "default", "kube-system", "monito
 POD_SUFFIXES = ["abc123", "xyz789", "def456", "ghi012", "jkl345"]
 
 
+def _adapt_action(action: str, template_context: dict, namespace: str, pod_suffix: str) -> str:
+    """Adapt obvious namespace/pod literals without corrupting kubectl flags."""
+    adapted = action
+
+    template_namespace = template_context.get("namespace")
+    if template_namespace:
+        adapted = re.sub(rf"(-n\s+){re.escape(str(template_namespace))}\b", rf"\g<1>{namespace}", adapted)
+        adapted = re.sub(rf"(namespace\s+){re.escape(str(template_namespace))}\b", rf"\g<1>{namespace}", adapted)
+
+    template_pod = template_context.get("pod")
+    if template_pod:
+        adapted = adapted.replace(str(template_pod), f"pod-{pod_suffix}")
+
+    return adapted
+
+
 def generate_synthetic_kfrd(
     n_samples: int = 7000,
     output_path: str | None = None,
@@ -408,17 +425,18 @@ def generate_synthetic_kfrd(
         if random.random() > 0.6:
             attempted.append(f"kubectl get events -n {ns} --sort-by='.metadata.creationTimestamp'")
 
-        actions = [a.replace(
-            list(template["context"].values())[0] if template["context"] else "",
-            f"pod-{pod_suffix}"
-        ) for a in template["actions"]]
+        sample_context = {**template["context"], "namespace": ns}
+        actions = [
+            _adapt_action(a, template["context"], ns, pod_suffix)
+            for a in template["actions"]
+        ]
 
         sample = {
             "id": f"kfrd_{i:05d}",
             "problem": (
                 f"Kubernetes {template['fault_category']} fault in namespace '{ns}'. "
                 f"Symptoms: {'. '.join(symptoms[:3])}. "
-                f"Context: {json.dumps(template['context'])}."
+                f"Context: {json.dumps(sample_context)}."
             ),
             "attempted_solutions": attempted,
             "final_solution": "\n".join(actions),
@@ -430,7 +448,7 @@ def generate_synthetic_kfrd(
             ),
             "fault_category": template["fault_category"],
             "symptoms": symptoms,
-            "context": {**template["context"], "namespace": ns},
+            "context": sample_context,
             "outcomes": template["outcomes"],
             "prevention": template["prevention"],
             "timestamp": time.time() - random.randint(0, 180 * 86400),
