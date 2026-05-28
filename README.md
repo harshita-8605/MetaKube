@@ -193,10 +193,10 @@ export HF_TOKEN=your_token_here
 # 3. Run SFT (~4-6 hours on RTX 5060)
 .venv/bin/python train/sft_lora.py \
   --model_id Qwen/Qwen3-8B-Instruct \
-  --dataset_path /ai-data/datasets/kfrd/kfrd_sft.json \
-  --output_dir /ai-data/models/kubellm \
+  --dataset_path data/datasets/kfrd/kfrd_sft.json \
+  --output_dir data/models/kubellm \
   --lora_rank 64 \
-  --num_epochs 5
+  --num_epochs 1
 
 # 4. Run eval with fine-tuned model
 .venv/bin/python eval/run_phase4.py --episodes 500 --queries 80

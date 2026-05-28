@@ -473,10 +473,13 @@ def load_kfrd_as_episodes(n_samples: int = 50) -> list:
 
 
 if __name__ == "__main__":
+    BASE_DIR = Path(__file__).resolve().parent.parent
+
     samples = generate_synthetic_kfrd(
         n_samples=7000,
-        output_path="/ai-data/datasets/kfrd",
+        output_path=BASE_DIR / "data" / "datasets" / "kfrd",
     )
+
     print(f"Total: {len(samples)} samples")
     print("Example (SFT format):")
     print(json.dumps(samples[0], indent=2, default=str))
