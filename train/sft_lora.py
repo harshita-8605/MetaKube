@@ -79,7 +79,12 @@ def run_sft(
     model.print_trainable_parameters()
 
     def tokenize(batch):
-        out = tokenizer(batch["text"], truncation=True, max_length=2048, padding=False)
+        out = tokenizer(
+            batch["text"],
+            truncation=True,
+            padding="max_length",
+            max_length=512,
+        )
         out["labels"] = out["input_ids"].copy()
         return out
 
