@@ -1,0 +1,891 @@
+[
+  {
+    "id": "kfrd_aoi_00065",
+    "problem": "Kubernetes Scheduling fault in namespace 'test-social-network'. Detect if any deployment has zero replicas running, which would cause service unavailability. Affected: Pods like user-service-5b549cc8dc-4wfmd, namespace test-social-network, service user-service. Symptoms: No pods available for service user-service' in service endpoints. Events show 'Scaled to 0 replicas. No pods available for service user-service.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-social-network -o wide",
+      "kubectl get deployments -n test-social-network -o wide",
+      "kubectl get services -n test-social-network -o wide",
+      "kubectl get events -n test-social-network --sort-by='.lastTimestamp' --field-selector type!=Normal | tail -50",
+      "kubectl describe deployment user-service -n test-social-network",
+      "kubectl get deployment user-service -n test-social-network -o yaml"
+    ],
+    "final_solution": "kubectl scale deployment user-service --replicas=1 -n test-social-network\nkubectl get pods -n test-social-network -l app=user-service\nkubectl get deployment user-service -n test-social-network -o wide\nkubectl describe pod user-service-5b549cc8dc-4wfmd -n test-social-network\nkubectl logs user-service-5b549cc8dc-4wfmd -n test-social-network --tail=50\nkubectl get endpoints user-service -n test-social-network\nkubectl get events -n test-social-network --sort-by='.lastTimestamp' --field-selector type!=Normal | tail -50",
+    "reasoning": "Root cause: The user-service deployment has been scaled to zero replicas due to an accidental scaling operation or a misconfigured autoscaler, causing the service to be unavailable.",
+    "fault_category": "Scheduling",
+    "symptoms": [
+      "No pods available for service user-service' in service endpoints",
+      "Events show 'Scaled to 0 replicas",
+      "No pods available for service user-service",
+      "Scaled to 0 replicas"
+    ],
+    "context": {
+      "namespace": "test-social-network",
+      "resource_type": "Deployment"
+    },
+    "outcomes": [
+      "Deployment scaled; pods available",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Verify nodeSelector/affinity labels exist on target nodes before deploy. Use PreferredDuringScheduling unless strict isolation is required. Set accurate resource requests so the scheduler can place pods.",
+    "timestamp": 1777462194.50503
+  },
+  {
+    "id": "kfrd_aoi_00066",
+    "problem": "Kubernetes Configuration fault in namespace 'astronomy-shop'. Identify the service(s) where the root cause of the fault lies. Affected: Pod recommendation-bb8cffcd8-qk72v, namespace astronomy-shop, service recommendation, Valkey service valkey-cart. Symptoms: This is caused by an incorrect CACHE_ADDR environment variable pointing to a non-existent Valkey instance. Connection refused. Valkey connection failed.",
+    "attempted_solutions": [
+      "kubectl get pods -n astronomy-shop",
+      "kubectl describe pod recommendation-bb8cffcd8-qk72v -n astronomy-shop",
+      "kubectl logs recommendation-bb8cffcd8-qk72v -n astronomy-shop --tail=50",
+      "kubectl get service valkey-cart -n astronomy-shop"
+    ],
+    "final_solution": "kubectl exec recommendation-bb8cffcd8-qk72v -n astronomy-shop -- env | grep -iE 'redis|cache|valkey'\nkubectl exec recommendation-bb8cffcd8-qk72v -n astronomy-shop -- python -c 'import os; print(\"CACHE_ADDR:\", os.getenv(\"CACHE_ADDR\", \"NOT_SET\")); print(\"REDIS_ADDR:\", os.getenv(\"REDIS_ADDR\", \"NOT_SET\")); print(\"All env vars with cache/redis:\"); import sys; [print(k, \"=\", v) for k, v in os.environ.items() if \"cache\" in k.lower() or \"redis\" in k.lower() or \"valkey\" in k.lower()]'\nkubectl get configmap -n astronomy-shop | grep -i recommendation\nkubectl get deployment recommendation -n astronomy-shop -o yaml\nkubectl get service recommendation -n astronomy-shop -o yaml\nkubectl get endpoints valkey-cart -n astronomy-shop -o yaml\nkubectl exec recommendation-bb8cffcd8-qk72v -n astronomy-shop -- python -c\nkubectl set env deployment/recommendation CACHE_ADDR=valkey-cart.valkey-cart.svc.cluster.local -n astronomy-shop\nkubectl rollout restart deployment/recommendation -n astronomy-shop\nkubectl get pods -n astronomy-shop\nkubectl describe pod recommendation-bb8cffcd8-qk72v -n astronomy-shop\nkubectl logs recommendation-bb8cffcd8-qk72v -n astronomy-shop --tail=50",
+    "reasoning": "Root cause: The recommendation service is unable to connect to the Valkey cache, leading to failed product recommendations and increased latency in the recommendation endpoint. This is caused by an incorrect CACHE_ADDR environment variable pointing to a non-existent Valkey instance.",
+    "fault_category": "Configuration",
+    "symptoms": [
+      "This is caused by an incorrect CACHE_ADDR environment variable pointing to a non-existent Valkey instance",
+      "Connection refused",
+      "Valkey connection failed",
+      "No such host",
+      "errors in the recommendation service logs, 'Valkey connection failed' in application"
+    ],
+    "context": {
+      "namespace": "astronomy-shop",
+      "resource_type": "Service",
+      "pod": "recommendation-bb8cffcd8-qk72v"
+    },
+    "outcomes": [
+      "Environment variable or resource limit applied to deployment",
+      "Pods restarted and returned to Running state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Use Helm sync waves or init containers to ensure ConfigMaps/Secrets exist before Deployments. Validate RBAC requirements at design time with kubectl auth can-i dry-run checks in CI.",
+    "timestamp": 1777462194.5052922
+  },
+  {
+    "id": "kfrd_aoi_00067",
+    "problem": "Kubernetes Resource fault in namespace 'test-hotel-reservation'. Diagnose and resolve the issue where the 'rate' service is failing to redeploy due to missing Persistent Volume (PV) configurations. Affected: Pods like rate-7bdc978679-r5ckb, namespace test-hotel-reservation, service rate, PVCs and PVs related to mongodb-rate. Symptoms: Events show 'FailedCreateContainer. . Events show. CreateContainerConfigError.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-hotel-reservation -o wide",
+      "kubectl get services -n test-hotel-reservation -o wide",
+      "kubectl get events -n test-hotel-reservation --sort-by='.lastTimestamp' --field-selector type!=Normal | tail -50",
+      "kubectl describe pod rate-7bdc978679-r5ckb -n test-hotel-reservation",
+      "kubectl logs rate-7bdc978679-r5ckb -n test-hotel-reservation",
+      "kubectl get deployment rate -n test-hotel-reservation -o yaml"
+    ],
+    "final_solution": "kubectl apply -f rate-deployment.yaml -n test-hotel-reservation\nkubectl get pods -n test-hotel-reservation -l app=rate\nkubectl describe pod rate-7bdc978679-r5ckb -n test-hotel-reservation\nkubectl logs rate-7bdc978679-r5ckb -n test-hotel-reservation",
+    "reasoning": "Root cause: The 'rate' deployment is missing a PersistentVolumeClaim (PVC) reference in its pod specification, causing it to fail during redeployment. This results in the service being unavailable.",
+    "fault_category": "Resource",
+    "symptoms": [
+      "Events show 'FailedCreateContainer",
+      ". Events show",
+      "CreateContainerConfigError",
+      "Error: failed to create container: invalid volume configuration: no PVC found for volume",
+      "Error: container has runButNotReady status: ContainerState{Waiting: &ContainerStateWa"
+    ],
+    "context": {
+      "namespace": "test-hotel-reservation",
+      "resource_type": "Deployment"
+    },
+    "outcomes": [
+      "Kubernetes manifests applied; desired state reconciled",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Set resource requests and limits for all containers. Enable VPA or HPA for auto-scaling. Alert at 80% of quota/limit utilisation.",
+    "timestamp": 1777462194.5055275
+  },
+  {
+    "id": "kfrd_aoi_00068",
+    "problem": "Kubernetes Resource fault in namespace 'test-hotel-reservation'. Your task is to diagnose and mitigate the issue where the consul service is not exposing the correct ports, causing connectivity issues with other services. Affected: Pods like consul-78c8d79bb-knhtc, namespace test-hotel-reservation, service consul, pods search-5c64c8f5bc-78db5 and reservation-6f8d456789-2xgkl. Symptoms: The consul service is misconfigured with incorrect port mappings, leading to failed connectivity from other services. Connection refused' when attempting to reach consul:8500. Logs from search pod show 'dial tcp: i/o timeout.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-hotel-reservation -o wide",
+      "kubectl get services -n test-hotel-reservation -o wide",
+      "kubectl get deployments -n test-hotel-reservation -o wide",
+      "kubectl describe service consul -n test-hotel-reservation",
+      "kubectl get service consul -n test-hotel-reservation -o yaml",
+      "kubectl get endpoints consul -n test-hotel-reservation -o yaml"
+    ],
+    "final_solution": "kubectl exec -n test-hotel-reservation search-5c64c8f5bc-78db5 -- nc -zv consul 8500\nkubectl logs -n test-hotel-reservation --tail=50 search-5c64c8f5bc-78db5\nkubectl get pod consul-78c8d79bb-knhtc -n test-hotel-reservation -o yaml\nkubectl get pod consul-78c8d79bb-knhtc -n test-hotel-reservation -o jsonpath='{.spec.containers[0].ports[*].containerPort}'\nkubectl get service consul -n test-hotel-reservation -o jsonpath='{.spec.ports[*].port}'\ncat > /tmp/consul-service-fixed.yaml << 'EOF'\nkubectl delete service consul -n test-hotel-reservation\nkubectl apply -f /tmp/consul-service-fixed.yaml\nkubectl get service consul -n test-hotel-reservation -o wide\nkubectl exec -n test-hotel-reservation search-5c64c8f5bc-78db5 -- nc -zv consul 8500\nkubectl logs -n test-hotel-reservation --tail=50 search-5c64c8f5bc-78db5",
+    "reasoning": "Root cause: The consul service is misconfigured with incorrect port mappings, leading to failed connectivity from other services. This results in the search and reservation components being unable to communicate with consul.",
+    "fault_category": "Resource",
+    "symptoms": [
+      "The consul service is misconfigured with incorrect port mappings, leading to failed connectivity from other services",
+      "Connection refused' when attempting to reach consul:8500",
+      "Logs from search pod show 'dial tcp: i/o timeout",
+      "Events show 'Endpoints not available",
+      "Connection refused"
+    ],
+    "context": {
+      "namespace": "test-hotel-reservation",
+      "resource_type": "Service",
+      "service": "consul"
+    },
+    "outcomes": [
+      "Kubernetes manifests applied; desired state reconciled",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Set resource requests and limits for all containers. Enable VPA or HPA for auto-scaling. Alert at 80% of quota/limit utilisation.",
+    "timestamp": 1777462194.505812
+  },
+  {
+    "id": "kfrd_aoi_00069",
+    "problem": "Kubernetes Resource fault in namespace 'test-hotel-reservation'. Detect anomalies related to redeploying a service without Persistent Volumes (PVs). Affected: Pods like mongodb-reservation-78c8d79bb-jwtrm, namespace test-hotel-reservation, PVC mongodb-reservation-pvc, service mongodb-reservation. Symptoms: Events show. : invalid mount path. Error: failed to create container: Error response from daemon: invalid mount config f.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-hotel-reservation -o wide",
+      "kubectl get pvc -n test-hotel-reservation",
+      "kubectl get pv -n test-hotel-reservation",
+      "kubectl describe pod mongodb-reservation-78c8d79bb-jwtrm -n test-hotel-reservation",
+      "kubectl logs mongodb-reservation-78c8d79bb-jwtrm -n test-hotel-reservation",
+      "kubectl get deployment mongodb-reservation -n test-hotel-reservation -o yaml"
+    ],
+    "final_solution": "kubectl delete pod mongodb-reservation-78c8d79bb-jwtrm -n test-hotel-reservation\nkubectl apply -f mongodb-reservation-deployment.yaml -n test-hotel-reservation\nkubectl get pods -n test-hotel-reservation -l app=mongodb-reservation\nkubectl describe pod mongodb-reservation-78c8d79bb-jwtrm -n test-hotel-reservation\nkubectl logs mongodb-reservation-78c8d79bb-jwtrm -n test-hotel-reservation\nkubectl get pods -n test-hotel-reservation -o wide\nkubectl get service mongodb-reservation -n test-hotel-reservation -o wide",
+    "reasoning": "Root cause: The mongodb-reservation deployment is configured to use a PersistentVolumeClaim (PVC) that does not exist, causing the pods to remain in CrashLoopBackOff due to failed volume mounting. This results in the service being unavailable.",
+    "fault_category": "Resource",
+    "symptoms": [
+      "Events show",
+      ": invalid mount path",
+      "Error: failed to create container: Error response from daemon: invalid mount config f",
+      "FailedMount"
+    ],
+    "context": {
+      "namespace": "test-hotel-reservation",
+      "resource_type": "Deployment"
+    },
+    "outcomes": [
+      "Faulty pod deleted and rescheduled by controller",
+      "Kubernetes manifests applied; desired state reconciled",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Set resource requests and limits for all containers. Enable VPA or HPA for auto-scaling. Alert at 80% of quota/limit utilisation.",
+    "timestamp": 1777462194.506061
+  },
+  {
+    "id": "kfrd_aoi_00070",
+    "problem": "Kubernetes Configuration fault in namespace 'test-hotel-reservation'. Resolve the revoked authentication issue in the MongoDB instance used by the geo service. Affected: Pods like mongodb-geo-5ff578bcb8-qjcvm, namespace test-hotel-reservation, service mongodb-geo, configmap failure-admin-geo. Symptoms: MongoDB connection error: auth failed', 'Failed to connect to MongoDB: authentication failed. Events show 'CrashLoopBackOff' for the mongodb-geo pod. MongoDB connection error: auth failed.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-hotel-reservation",
+      "kubectl describe pod mongodb-geo-5ff578bcb8-qjcvm -n test-hotel-reservation",
+      "kubectl logs mongodb-geo-5ff578bcb8-qjcvm -n test-hotel-reservation --tail=100",
+      "kubectl get configmap failure-admin-geo -n test-hotel-reservation -o yaml",
+      "kubectl get configmap mongo-geo-script -n test-hotel-reservation -o yaml",
+      "kubectl get deployment mongodb-geo -n test-hotel-reservation -o yaml"
+    ],
+    "final_solution": "kubectl delete pod mongodb-geo-5ff578bcb8-qjcvm -n test-hotel-reservation\nkubectl apply -f mongo-geo-credentials.yaml -n test-hotel-reservation\nkubectl apply -f mongodb-geo-deployment.yaml -n test-hotel-reservation\nkubectl get pods -n test-hotel-reservation\nkubectl describe pod mongodb-geo-5ff578bcb8-qjcvm -n test-hotel-reservation\nkubectl logs mongodb-geo-5ff578bcb8-qjcvm -n test-hotel-reservation --tail=100",
+    "reasoning": "Root cause: The MongoDB instance used by the geo service has had its administrative user revoked, leading to failed connections and data access issues. This results in the geo service being unable to retrieve or update location-based data.",
+    "fault_category": "Configuration",
+    "symptoms": [
+      "MongoDB connection error: auth failed', 'Failed to connect to MongoDB: authentication failed",
+      "Events show 'CrashLoopBackOff' for the mongodb-geo pod",
+      "MongoDB connection error: auth failed",
+      "Failed to connect to MongoDB: authentication failed",
+      "CrashLoopBackOff"
+    ],
+    "context": {
+      "namespace": "test-hotel-reservation",
+      "resource_type": "Service",
+      "service": "has"
+    },
+    "outcomes": [
+      "Faulty pod deleted and rescheduled by controller",
+      "Kubernetes manifests applied; desired state reconciled",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Use Helm sync waves or init containers to ensure ConfigMaps/Secrets exist before Deployments. Validate RBAC requirements at design time with kubectl auth can-i dry-run checks in CI.",
+    "timestamp": 1777462194.5062952
+  },
+  {
+    "id": "kfrd_aoi_00071",
+    "problem": "Kubernetes Configuration fault in namespace 'test-hotel-reservation'. Your mitigation can be performed using any of the available APIs. Affected: Pods like rate-7bdc978679-nbnw9, mongodb-rate-56cc8659c9-stkfv, namespace test-hotel-reservation, service rate, MongoDB database rate-db. Symptoms: MongoDB: command failed with error 13: 'not authorized on rate-db to execute command { find: \"hotels\", filter: {. } }' from DB::runCommand. Events show 'Failed to connect to MongoDB instance.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-hotel-reservation --show-labels -o wide",
+      "kubectl describe pod rate-7bdc978679-nbnw9 -n test-hotel-reservation",
+      "kubectl logs rate-7bdc978679-nbnw9 -n test-hotel-reservation --tail=50",
+      "kubectl get configmap mongo-profile-script -n test-hotel-reservation -o yaml",
+      "kubectl get deployment mongodb-rate -n test-hotel-reservation -o yaml",
+      "kubectl get configmap mongo-rate-script -n test-hotel-reservation -o yaml"
+    ],
+    "final_solution": "kubectl exec mongodb-rate-56cc8659c9-stkfv -n test-hotel-reservation -- mongo admin -u admin -p admin --authenticationDatabase admin --eval 'db.getUser(\"admin\")'\nkubectl exec mongodb-rate-56cc8659c9-stkfv -n test-hotel-reservation -- mongo admin -u admin -p admin --authenticationDatabase admin --eval 'db.getUser(\"admin\").roles'\nkubectl exec mongodb-rate-56cc8659c9-stkfv -n test-hotel-reservation -- mongo admin -u admin -p admin --authenticationDatabase admin --eval 'printjson(db.getUser(\"admin\"))' | grep -A 10 roles\nkubectl exec mongodb-rate-56cc8659c9-stkfv -n test-hotel-reservation -- mongo admin -u admin -p admin --authenticationDatabase admin --eval 'db.grantRolesToUser(\"admin\", [{role: \"readWrite\", db: \"rate-db\"}])'\nkubectl get pods -n test-hotel-reservation -l io.kompose.service=rate -o wide\nkubectl logs rate-7bdc978679-nbnw9 -n test-hotel-reservation --tail=50",
+    "reasoning": "Root cause: The MongoDB user 'admin' was revoked access to the 'rate-db' database, causing the rate service to fail when trying to access the database. This results in the rate service being unable to retrieve hotel rates and causing errors in the reservation system.",
+    "fault_category": "Configuration",
+    "symptoms": [
+      "MongoDB: command failed with error 13: 'not authorized on rate-db to execute command { find: \"hotels\", filter: {",
+      "} }' from DB::runCommand",
+      "Events show 'Failed to connect to MongoDB instance",
+      "MongoDB: command failed with error 13:",
+      "from DB::runCommand"
+    ],
+    "context": {
+      "namespace": "test-hotel-reservation",
+      "resource_type": "Service"
+    },
+    "outcomes": [
+      "Fault remediated; service restored to healthy state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Use Helm sync waves or init containers to ensure ConfigMaps/Secrets exist before Deployments. Validate RBAC requirements at design time with kubectl auth can-i dry-run checks in CI.",
+    "timestamp": 1777462194.5065517
+  },
+  {
+    "id": "kfrd_aoi_00072",
+    "problem": "Kubernetes Configuration fault in namespace 'test-hotel-reservation'. You are requested to identify the service(s) where the root cause of the fault lies. Affected: Pods like mongodb-rate-56cc8659c9-r9nvl, namespace test-hotel-reservation, service rate-service, MongoDB deployment mongodb-rate. Symptoms: not authorized on rate-db to execute command { find: \"users\", query: { user: \"admin\" },. }' from logs of rate-7bdc978679-t6b9j. Events show 'Failed to connect to MongoDB instance.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-hotel-reservation -o wide",
+      "kubectl describe pod rate-7bdc978679-t6b9j -n test-hotel-reservation",
+      "kubectl logs rate-7bdc978679-t6b9j -n test-hotel-reservation --tail=100",
+      "kubectl get services -n test-hotel-reservation",
+      "kubectl get deployments -n test-hotel-reservation",
+      "kubectl get pods -n test-hotel-reservation -l app=mongodb-rate"
+    ],
+    "final_solution": "kubectl exec -n test-hotel-reservation mongodb-rate-56cc8659c9-r9nvl -- mongo rate-db --eval 'db.getUsers()' --quiet\nkubectl exec -n test-hotel-reservation mongodb-rate-56cc8659c9-r9nvl -- mongo rate-db --eval 'db.getUser(\"admin\")' --quiet\nkubectl exec -n test-hotel-reservation mongodb-rate-56cc8659c9-r9nvl -- mongo rate-db --eval 'db.getUser(\"admin\").roles' --quiet\nkubectl get configmap failure-admin-rate -n test-hotel-reservation -o yaml\nkubectl delete configmap failure-admin-rate -n test-hotel-reservation\nkubectl apply -f mongodb-rate-admin-configmap.yaml -n test-hotel-reservation\nkubectl rollout restart deployment/mongodb-rate -n test-hotel-reservation\nkubectl get pods -n test-hotel-reservation -l app=mongodb-rate\nkubectl logs rate-7bdc978679-t6b9j -n test-hotel-reservation --tail=100 | grep -i 'not authorized'\nkubectl get pods -n test-hotel-reservation -o wide",
+    "reasoning": "Root cause: The MongoDB deployment (mongodb-rate) has had its administrative user revoked, causing the rate service to fail with 'not authorized' errors when attempting to access the database.",
+    "fault_category": "Configuration",
+    "symptoms": [
+      "not authorized on rate-db to execute command { find: \"users\", query: { user: \"admin\" },",
+      "}' from logs of rate-7bdc978679-t6b9j",
+      "Events show 'Failed to connect to MongoDB instance",
+      "not authorized on rate-db to execute command { find: \"users\", query: { user: \"admin\" }, ... }",
+      "Failed to connect to MongoDB instance"
+    ],
+    "context": {
+      "namespace": "test-hotel-reservation",
+      "resource_type": "Deployment",
+      "service": "rate-service"
+    },
+    "outcomes": [
+      "Kubernetes manifests applied; desired state reconciled",
+      "Pods restarted and returned to Running state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Use Helm sync waves or init containers to ensure ConfigMaps/Secrets exist before Deployments. Validate RBAC requirements at design time with kubectl auth can-i dry-run checks in CI.",
+    "timestamp": 1777462194.5068262
+  },
+  {
+    "id": "kfrd_aoi_00073",
+    "problem": "Kubernetes Configuration fault in namespace 'test-hotel-reservation'. You are requested to identify the service(s) where the root cause of the fault lies. Affected: Pods like rate-7bdc978679-rlr7p, namespace test-hotel-reservation, service mongodb-rate, MongoDB user 'admin' in database 'rate-db'. Symptoms: not authorized on rate-db to execute command { find: \"hotels\", filter: {. }' in application logs. MongoDB logs show 'Unauthorized: authenticate failed.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-hotel-reservation -o wide",
+      "kubectl describe pod rate-7bdc978679-rlr7p -n test-hotel-reservation",
+      "kubectl logs rate-7bdc978679-rlr7p -n test-hotel-reservation --tail=50",
+      "kubectl get pods -n test-hotel-reservation | grep -E '(profile|geo|recommendation|reservation|user)-[a-z0-9]+-[a-z0-9]+' | grep -v mongodb | awk '{print $1, $3}'",
+      "kubectl get deployment rate -n test-hotel-reservation -o yaml",
+      "kubectl get deployment mongodb-rate -n test-hotel-reservation -o yaml"
+    ],
+    "final_solution": "kubectl exec mongodb-rate-56cc8659c9-ckfrw -n test-hotel-reservation -- mongo admin -u root -p root --authenticationDatabase admin --eval 'db.getUsers()'\nkubectl exec mongodb-rate-56cc8659c9-ckfrw -n test-hotel-reservation -- mongo rate-db -u admin -p admin --authenticationDatabase admin --eval 'db.getUsers()'\nkubectl exec mongodb-rate-56cc8659c9-ckfrw -n test-hotel-reservation -- mongo admin -u admin -p admin --authenticationDatabase admin --eval 'db.system.users.find({user: \"admin\"}).pretty()'\nkubectl exec rate-7bdc978679-rlr7p -n test-hotel-reservation -- env | grep -i mongo\nkubectl get configmap -n test-hotel-reservation -o name | grep -i rate\nkubectl get deployment rate -n test-hotel-reservation -o jsonpath='{.spec.template.spec.containers[0].env[*]}' && echo ''\nkubectl exec mongodb-rate-56cc8659c9-ckfrw -n test-hotel-reservation -- mongo admin -u root -p root --authenticationDatabase admin --eval 'db.createUser({user: \"admin\", pwd: \"newpassword\", roles: [{role: \"readWrite\", db: \"rate-db\"}]})'\nkubectl delete pod rate-7bdc978679-rlr7p -n test-hotel-reservation\nkubectl get pods -n test-hotel-reservation -o wide | grep rate\nkubectl describe pod rate-7bdc978679-rlr7p -n test-hotel-reservation\nkubectl logs rate-7bdc978679-rlr7p -n test-hotel-reservation --tail=50",
+    "reasoning": "Root cause: The MongoDB user 'admin' has had its authentication revoked, causing the rate service to fail when attempting to connect to the MongoDB instance. This results in the rate service being unable to retrieve or update hotel rates.",
+    "fault_category": "Configuration",
+    "symptoms": [
+      "not authorized on rate-db to execute command { find: \"hotels\", filter: {",
+      "}' in application logs",
+      "MongoDB logs show 'Unauthorized: authenticate failed",
+      "Events show 'CrashLoopBackOff' for the rate pod",
+      "not authorized on rate-db to execute command { find: \"hotels\", filter: { ... }, ... }"
+    ],
+    "context": {
+      "namespace": "test-hotel-reservation",
+      "resource_type": "Service"
+    },
+    "outcomes": [
+      "Faulty pod deleted and rescheduled by controller",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Use Helm sync waves or init containers to ensure ConfigMaps/Secrets exist before Deployments. Validate RBAC requirements at design time with kubectl auth can-i dry-run checks in CI.",
+    "timestamp": 1777462194.5071418
+  },
+  {
+    "id": "kfrd_aoi_00074",
+    "problem": "Kubernetes Configuration fault in namespace 'test-hotel-reservation'. Detect anomalies related to MongoDB authentication revocation. Affected: Pods like mongodb-geo-5ff578bcb8-bvmml, namespace test-hotel-reservation, service geo, MongoDB instance geo-db. Symptoms: AtlasError: authentication failed' in geo service logs. MongoDB connection status shows 'auth fails. Events show 'Failed to connect to MongoDB.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-hotel-reservation --show-labels -o wide",
+      "kubectl get deployments -n test-hotel-reservation",
+      "kubectl get pods -n test-hotel-reservation",
+      "kubectl get services -n test-hotel-reservation",
+      "kubectl get events -n test-hotel-reservation",
+      "kubectl describe pod mongodb-geo-5ff578bcb8-bvmml -n test-hotel-reservation"
+    ],
+    "final_solution": "kubectl exec -n test-hotel-reservation mongodb-geo-5ff578bcb8-bvmml -- mongo geo-db -u admin -p admin --authenticationDatabase admin --eval 'db.runCommand({connectionStatus: 1})' --quiet\nkubectl get secret -n test-hotel-reservation -o name | grep -i mongo\nkubectl get secret mongo-geo-credentials -n test-hotel-reservation -o yaml\nkubectl get configmap mongo-geo-script -n test-hotel-reservation -o yaml\nkubectl exec -n test-hotel-reservation mongodb-geo-5ff578bcb8-bvmml -- mongo admin -u admin -p admin --authenticationDatabase admin --eval 'db.getUser(\"admin\")' --quiet\nkubectl exec -n test-hotel-reservation mongodb-geo-5ff578bcb8-bvmml -- mongo admin -u admin -p admin --authenticationDatabase admin --eval 'db.getUser(\"admin\").roles' --quiet\nkubectl delete secret mongo-geo-credentials -n test-hotel-reservation\nkubectl create secret generic mongo-geo-credentials -n test-hotel-reservation --from-literal=MONGO_USER=admin --from-literal=MONGO_PASSWORD=newpassword\nkubectl set env deployment/mongodb-geo -n test-hotel-reservation MONGO_PASSWORD=newpassword\nkubectl rollout restart deployment/mongodb-geo -n test-hotel-reservation\nkubectl get pods -n test-hotel-reservation\nkubectl logs mongodb-geo-5ff578bcb8-bvmml -n test-hotel-reservation --tail=100\nkubectl exec -n test-hotel-reservation mongodb-geo-5ff578bcb8-bvmml -- mongo geo-db -u admin -p newpassword --authenticationDatabase admin --eval 'db.runCommand({connectionStatus: 1})' --quiet",
+    "reasoning": "Root cause: The MongoDB admin user 'admin' had its authentication revoked, leading to failed connection attempts from the geo service. This results in the geo service being unable to access the MongoDB database, causing errors in hotel data retrieval.",
+    "fault_category": "Configuration",
+    "symptoms": [
+      "AtlasError: authentication failed' in geo service logs",
+      "MongoDB connection status shows 'auth fails",
+      "Events show 'Failed to connect to MongoDB",
+      "AtlasError: authentication failed",
+      "Failed to connect to MongoDB"
+    ],
+    "context": {
+      "namespace": "test-hotel-reservation",
+      "resource_type": "Service"
+    },
+    "outcomes": [
+      "Required Kubernetes object created and available to pods",
+      "Environment variable or resource limit applied to deployment",
+      "Pods restarted and returned to Running state"
+    ],
+    "prevention": "Use Helm sync waves or init containers to ensure ConfigMaps/Secrets exist before Deployments. Validate RBAC requirements at design time with kubectl auth can-i dry-run checks in CI.",
+    "timestamp": 1777462194.5074632
+  },
+  {
+    "id": "kfrd_aoi_00075",
+    "problem": "Kubernetes Configuration fault in namespace 'test-hotel-reservation'. Detect anomalies related to MongoDB authentication revocation. Affected: Pods like rate-7bdc978679-bj5ss, mongodb-rate-56cc8659c9-lklp4, namespace test-hotel-reservation, service rate, MongoDB instance rate-db. Symptoms: Events show 'Failed to connect to MongoDB. from MongoDB logs,. in the rate service logs. Events show.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-hotel-reservation -o wide",
+      "kubectl describe pod rate-7bdc978679-bj5ss -n test-hotel-reservation",
+      "kubectl logs rate-7bdc978679-bj5ss -n test-hotel-reservation --tail=100",
+      "kubectl get pods -n test-hotel-reservation | grep mongodb",
+      "kubectl describe pod mongodb-rate-56cc8659c9-lklp4 -n test-hotel-reservation"
+    ],
+    "final_solution": "kubectl exec mongodb-rate-56cc8659c9-lklp4 -n test-hotel-reservation -- mongo admin --eval 'db.system.users.find({user: \"admin\", db: \"rate-db\"}).pretty()' --quiet\nkubectl logs mongodb-rate-56cc8659c9-lklp4 -n test-hotel-reservation | grep -i 'revoke\\|role\\|admin\\|permission' | tail -50\nkubectl get configmap mongo-rate-script -n test-hotel-reservation -o jsonpath='{.data.revoke-admin-rate-mongo\\.sh}' | cat\nkubectl exec mongodb-rate-56cc8659c9-lklp4 -n test-hotel-reservation -- mongo rate-db --eval 'db.getUsers()' --quiet\nkubectl exec mongodb-rate-56cc8659c9-lklp4 -n test-hotel-reservation -- mongo admin --eval 'db.createUser({user: \"admin\", pwd: \"password\", roles: [{role: \"readWrite\", db: \"rate-db\"}]})' --quiet\nkubectl exec mongodb-rate-56cc8659c9-lklp4 -n test-hotel-reservation -- mongo admin --eval 'db.system.users.find({user: \"admin\", db: \"rate-db\"}).pretty()' --quiet\nkubectl get pods -n test-hotel-reservation -o wide\nkubectl describe pod rate-7bdc978679-bj5ss -n test-hotel-reservation\nkubectl logs rate-7bdc978679-bj5ss -n test-hotel-reservation --tail=100\nkubectl get pods -n test-hotel-reservation | grep rate",
+    "reasoning": "Root cause: The admin user's permissions in the MongoDB instance for the rate-db database have been revoked, leading to authentication failures in the rate service. This results in the rate service being unable to connect to the MongoDB database.",
+    "fault_category": "Configuration",
+    "symptoms": [
+      "Events show 'Failed to connect to MongoDB",
+      "from MongoDB logs,",
+      "in the rate service logs. Events show",
+      "system.users",
+      "failed' in the rate service logs"
+    ],
+    "context": {
+      "namespace": "test-hotel-reservation",
+      "resource_type": "Service"
+    },
+    "outcomes": [
+      "Fault remediated; service restored to healthy state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Use Helm sync waves or init containers to ensure ConfigMaps/Secrets exist before Deployments. Validate RBAC requirements at design time with kubectl auth can-i dry-run checks in CI.",
+    "timestamp": 1777462194.5077755
+  },
+  {
+    "id": "kfrd_aoi_00076",
+    "problem": "Kubernetes Scheduling fault in namespace 'test-social-network'. Mitigate the issue where the user-service deployment has zero pods running due to incorrect node affinity settings. Affected: Pods like user-service-5b549cc8dc-4wfmd, namespace test-social-network, service user-service, nodes with labels 'kubernetes. Symptoms: 0/3 nodes are available: 1 node(s) had taints that the pod did not tolerate, 2 node(s) didn. Events show. FailedScheduling.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-social-network",
+      "kubectl get deployments -n test-social-network",
+      "kubectl describe deployment user-service -n test-social-network",
+      "kubectl get pod user-service-5b549cc8dc-4wfmd -n test-social-network -o yaml",
+      "kubectl describe pod user-service-5b549cc8dc-4wfmd -n test-social-network",
+      "kubectl get events -n test-social-network"
+    ],
+    "final_solution": "kubectl patch deployment user-service -n test-social-network -p '{\"spec\":{\"template\":{\"spec\":{\"affinity\":null}}}}'\nkubectl scale deployment user-service -n test-social-network --replicas=2\nkubectl get pods -n test-social-network -l service=user-service\nkubectl describe pod user-service-5b549cc8dc-4wfmd -n test-social-network\nkubectl get pods -n test-social-network\nkubectl get events -n test-social-network | grep user-service",
+    "reasoning": "Root cause: The user-service deployment has a node affinity rule that specifies a non-existent node label, causing pods to remain in Pending state. This results in the service being unavailable.",
+    "fault_category": "Scheduling",
+    "symptoms": [
+      "0/3 nodes are available: 1 node(s) had taints that the pod did not tolerate, 2 node(s) didn",
+      "Events show",
+      "FailedScheduling"
+    ],
+    "context": {
+      "namespace": "test-social-network",
+      "resource_type": "Deployment"
+    },
+    "outcomes": [
+      "Scheduling constraint corrected; pods scheduled successfully",
+      "Deployment scaled; pods available",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Verify nodeSelector/affinity labels exist on target nodes before deploy. Use PreferredDuringScheduling unless strict isolation is required. Set accurate resource requests so the scheduler can place pods.",
+    "timestamp": 1777462194.508008
+  },
+  {
+    "id": "kfrd_aoi_00077",
+    "problem": "Kubernetes Scheduling fault in namespace 'test-social-network'. Analyze the service's state and telemetry to identify the root cause of the user-service deployment having zero replicas. Affected: Pods like user-service-5b549cc8dc-4wfmd, namespace test-social-network, service user-service, nodes with labels 'kubernetes. Symptoms: 0/3 nodes are available: 1 node(s) had taints that the pod did not tolerate, 2 node(s) didn. Events show. FailedScheduling.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-social-network -l service=user-service -o wide",
+      "kubectl get deployments -n test-social-network -o wide",
+      "kubectl describe deployment user-service -n test-social-network",
+      "kubectl get events -n test-social-network --field-selector involvedObject.name=user-service --sort-by='.lastTimestamp'",
+      "kubectl get pods -n test-social-network -l service=user-service -o yaml",
+      "kubectl describe pod user-service-5b549cc8dc-4wfmd -n test-social-network"
+    ],
+    "final_solution": "kubectl patch deployment user-service -n test-social-network -p '{\"spec\":{\"template\":{\"spec\":{\"affinity\":null}}}}'\nkubectl scale deployment user-service --replicas=3 -n test-social-network\nkubectl get pods -n test-social-network -l service=user-service -o wide\nkubectl describe pod user-service-5b549cc8dc-4wfmd -n test-social-network\nkubectl logs user-service-5b549cc8dc-4wfmd -n test-social-network",
+    "reasoning": "Root cause: The user-service deployment has a node affinity rule that specifies a non-existent node label, causing pods to remain in Pending state. This results in the service being unavailable.",
+    "fault_category": "Scheduling",
+    "symptoms": [
+      "0/3 nodes are available: 1 node(s) had taints that the pod did not tolerate, 2 node(s) didn",
+      "Events show",
+      "FailedScheduling"
+    ],
+    "context": {
+      "namespace": "test-social-network",
+      "resource_type": "Deployment"
+    },
+    "outcomes": [
+      "Scheduling constraint corrected; pods scheduled successfully",
+      "Deployment scaled; pods available",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Verify nodeSelector/affinity labels exist on target nodes before deploy. Use PreferredDuringScheduling unless strict isolation is required. Set accurate resource requests so the scheduler can place pods.",
+    "timestamp": 1777462194.5082147
+  },
+  {
+    "id": "kfrd_aoi_00078",
+    "problem": "Kubernetes Scheduling fault in namespace 'test-social-network'. You are requested to identify the service(s) where the root cause of the fault lies. Affected: Pods like user-service-5b549cc8dc-4wfmd, namespace test-social-network, service user-service, nodes with labels 'kubernetes. Symptoms: 0/3 nodes are available: 1 node(s) had taints that the pod did not tolerate, 2 node(s) didn. Events show. FailedScheduling.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-social-network -o wide",
+      "kubectl get deployments -n test-social-network -o wide",
+      "kubectl describe deployment user-service -n test-social-network",
+      "kubectl get pod user-service-5b549cc8dc-4wfmd -n test-social-network -o yaml",
+      "kubectl describe pod user-service-5b549cc8dc-4wfmd -n test-social-network",
+      "kubectl logs user-service-5b549cc8dc-4wfmd -n test-social-network"
+    ],
+    "final_solution": "kubectl scale deployment user-service --replicas=2 -n test-social-network\nkubectl get pods -n test-social-network -l app=user-service\nkubectl describe pod user-service-5b549cc8dc-4wfmd -n test-social-network\nkubectl logs user-service-5b549cc8dc-4wfmd -n test-social-network",
+    "reasoning": "Root cause: The user-service deployment has a node affinity rule that specifies a non-existent node label, causing pods to remain in Pending state. This results in the service being unavailable.",
+    "fault_category": "Scheduling",
+    "symptoms": [
+      "0/3 nodes are available: 1 node(s) had taints that the pod did not tolerate, 2 node(s) didn",
+      "Events show",
+      "FailedScheduling"
+    ],
+    "context": {
+      "namespace": "test-social-network",
+      "resource_type": "Deployment"
+    },
+    "outcomes": [
+      "Deployment scaled; pods available",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Verify nodeSelector/affinity labels exist on target nodes before deploy. Use PreferredDuringScheduling unless strict isolation is required. Set accurate resource requests so the scheduler can place pods.",
+    "timestamp": 1777462194.5084062
+  },
+  {
+    "id": "kfrd_aoi_00079",
+    "problem": "Kubernetes Configuration fault in namespace 'test-hotel-reservation'. Identify and resolve the root cause of the user-service not being able to connect to the MongoDB instance. Affected: Pods like user-service-66d5d6f874-5rz2q, namespace test-hotel-reservation, service user-service, MongoDB deployment mongodb-rate. Symptoms: pymongo.errors.ConnectionFailure: Could not connect to MongoDB: [Errno 111] Connection refused. Events show 'CrashLoopBackOff' for user-service pods. CrashLoopBackOff.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-hotel-reservation --show-labels -o wide",
+      "kubectl get pods -n test-hotel-reservation",
+      "kubectl get services -n test-hotel-reservation -o wide",
+      "kubectl describe pod user-service-66d5d6f874-5rz2q -n test-hotel-reservation",
+      "kubectl logs user-service-66d5d6f874-5rz2q -n test-hotel-reservation --tail=50",
+      "kubectl get deployment user-service -n test-hotel-reservation -o yaml"
+    ],
+    "final_solution": "kubectl rollout status deployment/user-service -n test-hotel-reservation\nkubectl get pods -n test-hotel-reservation\nkubectl describe pod user-service-66d5d6f874-5rz2q -n test-hotel-reservation\nkubectl logs user-service-66d5d6f874-5rz2q -n test-hotel-reservation --tail=50\nkubectl get pods -n test-hotel-reservation",
+    "reasoning": "Root cause: The user-service deployment is configured with incorrect MongoDB connection credentials, leading to failed connections and service unavailability.",
+    "fault_category": "Configuration",
+    "symptoms": [
+      "pymongo.errors.ConnectionFailure: Could not connect to MongoDB: [Errno 111] Connection refused",
+      "Events show 'CrashLoopBackOff' for user-service pods",
+      "CrashLoopBackOff",
+      "CrashLoopBackOff' for user-service pods"
+    ],
+    "context": {
+      "namespace": "test-hotel-reservation",
+      "resource_type": "Deployment"
+    },
+    "outcomes": [
+      "Fault remediated; service restored to healthy state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Use Helm sync waves or init containers to ensure ConfigMaps/Secrets exist before Deployments. Validate RBAC requirements at design time with kubectl auth can-i dry-run checks in CI.",
+    "timestamp": 1777462194.5085943
+  },
+  {
+    "id": "kfrd_aoi_00080",
+    "problem": "Kubernetes Configuration fault in namespace 'test-hotel-reservation'. Your task is to mitigate anomalies detected in the service, specifically related to a user-unregistered MongoDB instance. Affected: Pods like geo-84fbc958c7-krpf9, mongodb-geo-5ff578bcb8-rctvx, namespace test-hotel-reservation, service geo. Symptoms: MongoDB connection error: auth failed. Failed to authenticate user geo_user on database admin. CrashLoopBackOff.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-hotel-reservation --show-labels -o wide",
+      "kubectl describe pod geo-84fbc958c7-krpf9 -n test-hotel-reservation",
+      "kubectl logs geo-84fbc958c7-krpf9 -n test-hotel-reservation --tail=50",
+      "kubectl get deployment geo -n test-hotel-reservation -o yaml",
+      "kubectl get deployment mongodb-geo -n test-hotel-reservation -o yaml",
+      "kubectl get secret mongodb-geo-credentials -n test-hotel-reservation -o jsonpath='{.data.username}' | base64 --decode"
+    ],
+    "final_solution": "kubectl exec mongodb-geo-5ff578bcb8-rctvx -n test-hotel-reservation -- mongosh admin --eval 'db.createUser({user: \"geo_user\", pwd: \"geo_password\", roles: [{role: \"readWrite\", db: \"geo\"}]})' --quiet\nkubectl get configmap mongo-geo-script -n test-hotel-reservation -o yaml\nkubectl get deployment geo -n test-hotel-reservation -o jsonpath='{.spec.template.spec.containers[0].env}' | jq .\nkubectl patch deployment geo -n test-hotel-reservation -p '{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"geo\",\"env\":[{\"name\":\"MONGO_PASSWORD\",\"value\":\"geo_password\"}]}]}}}}'\nkubectl rollout restart deployment/geo -n test-hotel-reservation\nkubectl get pods -n test-hotel-reservation -l io.kompose.service=geo -o wide\nkubectl describe pod geo-84fbc958c7-krpf9 -n test-hotel-reservation\nkubectl logs geo-84fbc958c7-krpf9 -n test-hotel-reservation --tail=50",
+    "reasoning": "Root cause: The MongoDB instance 'mongodb-geo' is not registered with the correct user credentials, causing connection failures in the 'geo' service. This results in the geo service being unable to retrieve location data, leading to incomplete hotel recommendations.",
+    "fault_category": "Configuration",
+    "symptoms": [
+      "MongoDB connection error: auth failed",
+      "Failed to authenticate user geo_user on database admin",
+      "CrashLoopBackOff",
+      "error: auth failed'; 'Failed to authenticate user geo_user on database admin'; Events",
+      "CrashLoopBackOff' for the geo pod"
+    ],
+    "context": {
+      "namespace": "test-hotel-reservation",
+      "resource_type": "Service"
+    },
+    "outcomes": [
+      "Pods restarted and returned to Running state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Use Helm sync waves or init containers to ensure ConfigMaps/Secrets exist before Deployments. Validate RBAC requirements at design time with kubectl auth can-i dry-run checks in CI.",
+    "timestamp": 1777462194.5088415
+  },
+  {
+    "id": "kfrd_aoi_00081",
+    "problem": "Kubernetes Configuration fault in namespace 'test-hotel-reservation'. Your task is to mitigate the issue where the MongoDB instance is not registering users due to incorrect authentication configuration. Affected: Pods like mongodb-rate-56cc8659c9-qtw5l, namespace test-hotel-reservation, service mongodb-rate. Symptoms: The MongoDB service is unable to authenticate users, causing the 'user_unregistered' error. failed for user admin on database admin from client 127.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-hotel-reservation -o wide",
+      "kubectl describe pod mongodb-rate-56cc8659c9-qtw5l -n test-hotel-reservation",
+      "kubectl get service mongodb-rate -n test-hotel-reservation -o yaml",
+      "kubectl get configmap mongo-rate-script -n test-hotel-reservation -o yaml",
+      "kubectl get secret mongodb-rate-credentials -n test-hotel-reservation -o jsonpath='{.data.username}'",
+      "kubectl get secret mongodb-rate-credentials -n test-hotel-reservation -o jsonpath='{.data.password}'"
+    ],
+    "final_solution": "kubectl exec -n test-hotel-reservation mongodb-rate-56cc8659c9-qtw5l -- mongo admin -u admin -p admin --authenticationDatabase admin --eval 'db.getUsers()'\nkubectl logs mongodb-rate-56cc8659c9-qtw5l -n test-hotel-reservation --tail=100\nkubectl exec -n test-hotel-reservation mongodb-rate-56cc8659c9-qtw5l -- cat /scripts/failure-admin-rate.sh\nkubectl delete secret mongodb-rate-credentials -n test-hotel-reservation\nkubectl create secret generic mongodb-rate-credentials -n test-hotel-reservation --from-literal=username=admin --from-literal=password=correctpassword\nkubectl apply -f mongodb-rate-deployment.yaml -n test-hotel-reservation\nkubectl get pods -n test-hotel-reservation -l io.kompose.service=mongodb-rate -o wide\nkubectl describe pod mongodb-rate-56cc8659c9-qtw5l -n test-hotel-reservation\nkubectl logs mongodb-rate-56cc8659c9-qtw5l -n test-hotel-reservation --tail=100",
+    "reasoning": "Root cause: The MongoDB deployment is configured with incorrect authentication credentials, leading to failed user registration attempts. The MongoDB service is unable to authenticate users, causing the 'user_unregistered' error.",
+    "fault_category": "Configuration",
+    "symptoms": [
+      "The MongoDB service is unable to authenticate users, causing the 'user_unregistered' error",
+      "failed for user admin on database admin from client 127"
+    ],
+    "context": {
+      "namespace": "test-hotel-reservation",
+      "resource_type": "Deployment",
+      "service": "mongodb-rate"
+    },
+    "outcomes": [
+      "Required Kubernetes object created and available to pods",
+      "Kubernetes manifests applied; desired state reconciled",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Use Helm sync waves or init containers to ensure ConfigMaps/Secrets exist before Deployments. Validate RBAC requirements at design time with kubectl auth can-i dry-run checks in CI.",
+    "timestamp": 1777462194.509101
+  },
+  {
+    "id": "kfrd_aoi_00082",
+    "problem": "Kubernetes Configuration fault in namespace 'test-hotel-reservation'. You are requested to identify the service(s) where the root cause of the fault lies. Affected: Pods like user-service-66d5d6f874-rxnll, namespace test-hotel-reservation, service mongodb-user, MongoDB deployment mongodb-user-5ff578bcb8-hz7xb. Symptoms: MongoDB connection error: authentication failed' in user-service logs. Events show 'CrashLoopBackOff' for user-service pods. MongoDB connection error: authentication failed.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-hotel-reservation",
+      "kubectl describe pod user-66d5d6f874-rxnll -n test-hotel-reservation",
+      "kubectl logs user-66d5d6f874-rxnll -n test-hotel-reservation",
+      "kubectl get services -n test-hotel-reservation",
+      "kubectl describe service mongodb-user -n test-hotel-reservation",
+      "kubectl get deployment mongodb-user -n test-hotel-reservation -o yaml"
+    ],
+    "final_solution": "kubectl set env deployment/user -n test-hotel-reservation MONGO_URI=mongodb://user:password@mongodb-user:27017/dbname\nkubectl rollout restart deployment/user -n test-hotel-reservation\nkubectl get pods -n test-hotel-reservation\nkubectl describe pod user-66d5d6f874-rxnll -n test-hotel-reservation\nkubectl logs user-66d5d6f874-rxnll -n test-hotel-reservation",
+    "reasoning": "Root cause: The user-service deployment is unable to connect to the MongoDB instance because the MongoDB service is not properly configured with the correct connection URI. This results in the user-service being unable to authenticate or access the database, leading to failed operations.",
+    "fault_category": "Configuration",
+    "symptoms": [
+      "MongoDB connection error: authentication failed' in user-service logs",
+      "Events show 'CrashLoopBackOff' for user-service pods",
+      "MongoDB connection error: authentication failed",
+      "CrashLoopBackOff",
+      "error: authentication failed' in user-service logs"
+    ],
+    "context": {
+      "namespace": "test-hotel-reservation",
+      "resource_type": "Deployment"
+    },
+    "outcomes": [
+      "Environment variable or resource limit applied to deployment",
+      "Pods restarted and returned to Running state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Use Helm sync waves or init containers to ensure ConfigMaps/Secrets exist before Deployments. Validate RBAC requirements at design time with kubectl auth can-i dry-run checks in CI.",
+    "timestamp": 1777462194.5093176
+  },
+  {
+    "id": "kfrd_aoi_00083",
+    "problem": "Kubernetes Configuration fault in namespace 'test-hotel-reservation'. You are requested to identify the service(s) where the root cause of the fault lies. Affected: Pods like mongodb-user-7df8598f74-2q6gk, namespace test-hotel-reservation, service mongodb-user, configmap failure-admin-user. Symptoms: Authentication failed: user not found. MongoDB connection refused. Failed to connect to MongoDB.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-hotel-reservation -o wide",
+      "kubectl describe pod mongodb-user-7df8598f74-2q6gk -n test-hotel-reservation",
+      "kubectl get configmap failure-admin-user -n test-hotel-reservation -o yaml",
+      "kubectl get secret mongodb-user-credentials -n test-hotel-reservation -o yaml",
+      "kubectl logs mongodb-user-7df8598f74-2q6gk -n test-hotel-reservation --tail=100",
+      "kubectl get deployment mongodb-user -n test-hotel-reservation -o yaml"
+    ],
+    "final_solution": "kubectl apply -f - <<EOF\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: failure-admin-user\n  namespace: test-hotel-reservation\ndata:\n  MONGO_USER:\nkubectl delete pod mongodb-user-7df8598f74-2q6gk -n test-hotel-reservation\nkubectl get pods -n test-hotel-reservation -l app=mongodb-user\nkubectl describe pod mongodb-user-7df8598f74-2q6gk -n test-hotel-reservation\nkubectl logs mongodb-user-7df8598f74-2q6gk -n test-hotel-reservation --tail=100\nkubectl get service mongodb-user -n test-hotel-reservation",
+    "reasoning": "Root cause: The MongoDB user database is not registered, leading to authentication failures when users attempt to access hotel reservation features. This results in users being unable to log in or save reservations.",
+    "fault_category": "Configuration",
+    "symptoms": [
+      "Authentication failed: user not found",
+      "MongoDB connection refused",
+      "Failed to connect to MongoDB",
+      "failed: user not found' in application logs, 'MongoDB connection refused' in service l"
+    ],
+    "context": {
+      "namespace": "test-hotel-reservation",
+      "resource_type": "Service",
+      "service": "mongodb-user"
+    },
+    "outcomes": [
+      "Kubernetes manifests applied; desired state reconciled",
+      "Faulty pod deleted and rescheduled by controller",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Use Helm sync waves or init containers to ensure ConfigMaps/Secrets exist before Deployments. Validate RBAC requirements at design time with kubectl auth can-i dry-run checks in CI.",
+    "timestamp": 1777462194.509535
+  },
+  {
+    "id": "kfrd_aoi_00084",
+    "problem": "Kubernetes Configuration fault in namespace 'test-hotel-reservation'. Detect anomalies related to user unregistered MongoDB connections. Affected: Pods like user-66d5d6f874-q2gtx, namespace test-hotel-reservation, service mongodb-user, configmaps mongo-user-script. Symptoms: pymongo.errors.ConnectionFailure: Could not connect to MongoDB: [Errno 111] Connection refused. Events show 'CrashLoopBackOff' for user pods. CrashLoopBackOff.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-hotel-reservation -o wide",
+      "kubectl describe pod user-66d5d6f874-q2gtx -n test-hotel-reservation",
+      "kubectl get services -n test-hotel-reservation",
+      "kubectl get configmap mongo-user-script -n test-hotel-reservation -o yaml",
+      "kubectl get deployment mongodb-user -n test-hotel-reservation -o yaml",
+      "kubectl logs user-66d5d6f874-q2gtx -n test-hotel-reservation"
+    ],
+    "final_solution": "kubectl patch configmap mongo-user-script -n test-hotel-reservation -p '{\"data\":{\"MONGO_URI\":\"mongodb://mongodb-user:password@mongodb-user-svc:27017/user_db?authSource=admin\"}}'\nkubectl rollout restart deployment/user -n test-hotel-reservation\nkubectl get pods -n test-hotel-reservation -l app=user\nkubectl describe pod user-66d5d6f874-q2gtx -n test-hotel-reservation\nkubectl logs user-66d5d6f874-q2gtx -n test-hotel-reservation",
+    "reasoning": "Root cause: The MongoDB user database is not properly configured, leading to unregistered users being unable to connect to the database. This results in failed reservations and incorrect user profile data.",
+    "fault_category": "Configuration",
+    "symptoms": [
+      "pymongo.errors.ConnectionFailure: Could not connect to MongoDB: [Errno 111] Connection refused",
+      "Events show 'CrashLoopBackOff' for user pods",
+      "CrashLoopBackOff",
+      "CrashLoopBackOff' for user pods"
+    ],
+    "context": {
+      "namespace": "test-hotel-reservation",
+      "resource_type": "Service",
+      "service": "mongodb-user"
+    },
+    "outcomes": [
+      "Pods restarted and returned to Running state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Use Helm sync waves or init containers to ensure ConfigMaps/Secrets exist before Deployments. Validate RBAC requirements at design time with kubectl auth can-i dry-run checks in CI.",
+    "timestamp": 1777462194.5097876
+  },
+  {
+    "id": "kfrd_aoi_00085",
+    "problem": "Kubernetes Image fault in namespace 'test-hotel-reservation'. Your mitigation can be performed using any of the available APIs. Affected: Pods like profile-5fc7b778f5-xw5d5, namespace test-hotel-reservation, service profile. Symptoms: Events show 'Failed to start service. method not found. unable to find method.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-hotel-reservation -o wide",
+      "kubectl get services -n test-hotel-reservation -o wide",
+      "kubectl get deployments -n test-hotel-reservation -o wide",
+      "kubectl describe pod profile-5fc7b778f5-xw5d5 -n test-hotel-reservation",
+      "kubectl logs profile-5fc7b778f5-xw5d5 -n test-hotel-reservation --tail=20",
+      "kubectl get events -n test-hotel-reservation --sort-by='.lastTimestamp' --field-selector type!=Normal"
+    ],
+    "final_solution": "kubectl rollout status deployment/profile -n test-hotel-reservation\nkubectl get deployment profile -n test-hotel-reservation -o jsonpath='{.spec.template.spec.containers[0].image}'\nkubectl patch deployment profile -n test-hotel-reservation --type=json -p='[{\"op\": \"replace\", \"path\": \"/spec/template/spec/containers/0/image\", \"value\": \"correct-image:latest\"}]'\nkubectl rollout status deployment/profile -n test-hotel-reservation\nkubectl get pods -n test-hotel-reservation -l io.kompose.service=profile\nkubectl describe pod profile-5fc7b778f5-xw5d5 -n test-hotel-reservation\nkubectl logs profile-5fc7b778f5-xw5d5 -n test-hotel-reservation --tail=20",
+    "reasoning": "Root cause: The profile service is using an incorrect binary that does not support the required gRPC endpoints, causing requests to fail with 'method not found' errors. This results in the service being unavailable for user operations.",
+    "fault_category": "Image",
+    "symptoms": [
+      "Events show 'Failed to start service",
+      "method not found",
+      "unable to find method",
+      "no matching handler for request",
+      "Failed to start service"
+    ],
+    "context": {
+      "namespace": "test-hotel-reservation",
+      "resource_type": "Service"
+    },
+    "outcomes": [
+      "Fault remediated; service restored to healthy state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Pin image tags to immutable digests or explicit semver in all manifests. Never use :latest in production. Build multi-arch images with buildx in CI.",
+    "timestamp": 1777462194.5100262
+  },
+  {
+    "id": "kfrd_aoi_00086",
+    "problem": "Kubernetes Image fault in namespace 'test-hotel-reservation'. Analyze the service's state and telemetry to identify and resolve the fault. Affected: Pods like profile-5fc7b778f5-2hzkl, namespace test-hotel-reservation, service profile, deployment profile. Symptoms: panic: unsupported API version' in logs, 'Error: failed to fetch user profile' in application logs. Events show 'CrashLoopBackOff' for the profile pod. panic: unsupported API version.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-hotel-reservation",
+      "kubectl describe pod profile-5fc7b778f5-2hzkl -n test-hotel-reservation",
+      "kubectl logs profile-5fc7b778f5-2hzkl -n test-hotel-reservation --tail=50",
+      "kubectl get deployments -n test-hotel-reservation",
+      "kubectl get deployment profile -n test-hotel-reservation -o yaml",
+      "kubectl get deployment profile -n test-hotel-reservation -o jsonpath='{.spec.template.spec.containers[0].image}'"
+    ],
+    "final_solution": "kubectl set image deployment/profile profile=image-repository/profile-image:correct-tag -n test-hotel-reservation\nkubectl rollout status deployment/profile -n test-hotel-reservation\nkubectl get pods -n test-hotel-reservation\nkubectl describe pod profile-5fc7b778f5-2hzkl -n test-hotel-reservation\nkubectl logs profile-5fc7b778f5-2hzkl -n test-hotel-reservation --tail=50",
+    "reasoning": "Root cause: The 'profile' container in the 'profile' deployment is using a wrong binary that does not support the required API version, leading to failed requests and service unavailability.",
+    "fault_category": "Image",
+    "symptoms": [
+      "panic: unsupported API version' in logs, 'Error: failed to fetch user profile' in application logs",
+      "Events show 'CrashLoopBackOff' for the profile pod",
+      "panic: unsupported API version",
+      "Error: failed to fetch user profile",
+      "CrashLoopBackOff"
+    ],
+    "context": {
+      "namespace": "test-hotel-reservation",
+      "resource_type": "Deployment",
+      "service": "unavailability"
+    },
+    "outcomes": [
+      "Container image updated to correct version",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Pin image tags to immutable digests or explicit semver in all manifests. Never use :latest in production. Build multi-arch images with buildx in CI.",
+    "timestamp": 1777462194.5102098
+  },
+  {
+    "id": "kfrd_aoi_00087",
+    "problem": "Kubernetes Image fault in namespace 'test-hotel-reservation'. You are requested to identify the service(s) where the root cause of the fault lies. Affected: Pods like profile-5fc7b778f5-5pplz, namespace test-hotel-reservation, service profile. Symptoms: Error: failed to start profile service: exec: \"wrong-bin\": executable file not found in $PATH. Events show 'CrashLoopBackOff' for the profile pods. CrashLoopBackOff.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-hotel-reservation -o wide",
+      "kubectl get services -n test-hotel-reservation -o wide",
+      "kubectl get deployments -n test-hotel-reservation -o wide",
+      "kubectl get events -n test-hotel-reservation --sort-by='.lastTimestamp' --field-selector type!=Normal",
+      "kubectl describe pod profile-5fc7b778f5-5pplz -n test-hotel-reservation",
+      "kubectl logs profile-5fc7b778f5-5pplz -n test-hotel-reservation --tail=50"
+    ],
+    "final_solution": "kubectl set image deployment/profile profile-container=new-image:correct-tag -n test-hotel-reservation\nkubectl rollout status deployment/profile -n test-hotel-reservation\nkubectl get pods -n test-hotel-reservation -l app=profile\nkubectl describe pod profile-5fc7b778f5-5pplz -n test-hotel-reservation\nkubectl logs profile-5fc7b778f5-5pplz -n test-hotel-reservation --tail=50\nkubectl get deployment profile -n test-hotel-reservation -o wide",
+    "reasoning": "Root cause: The 'profile' service is using an incorrect binary in its container image, leading to failed initialization and unresponsive pods. This causes the service to fail when attempting to retrieve hotel profiles.",
+    "fault_category": "Image",
+    "symptoms": [
+      "Error: failed to start profile service: exec: \"wrong-bin\": executable file not found in $PATH",
+      "Events show 'CrashLoopBackOff' for the profile pods",
+      "CrashLoopBackOff",
+      "Error: failed to start profile service: exec: \"wrong-bin\": executable file not found",
+      "CrashLoopBackOff' for the profile pods"
+    ],
+    "context": {
+      "namespace": "test-hotel-reservation",
+      "resource_type": "Service",
+      "service": "profile"
+    },
+    "outcomes": [
+      "Container image updated to correct version",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Pin image tags to immutable digests or explicit semver in all manifests. Never use :latest in production. Build multi-arch images with buildx in CI.",
+    "timestamp": 1777462194.5104215
+  },
+  {
+    "id": "kfrd_aoi_00088",
+    "problem": "Kubernetes Image fault in namespace 'test-hotel-reservation'. Detect anomalies in the service. Affected: Pods like reservation-7894567890-abcde, namespace test-hotel-reservation, service reservation, deployment reservation. Symptoms: ERROR: failed to send request: rpc error: code = Unimplemented desc = unknown service hotel.ReservationService. Events show 'CrashLoopBackOff' for the reservation pods. . Events show.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-hotel-reservation -o wide",
+      "kubectl get deployments -n test-hotel-reservation -o wide",
+      "kubectl get events -n test-hotel-reservation --sort-by='.lastTimestamp' --field-selector type!=Normal",
+      "kubectl describe pod reservation-7894567890-abcde -n test-hotel-reservation",
+      "kubectl logs reservation-7894567890-abcde -n test-hotel-reservation",
+      "kubectl get deployment reservation -n test-hotel-reservation -o yaml"
+    ],
+    "final_solution": "kubectl set image deployment/reservation reservation-container=correct-image-tag -n test-hotel-reservation\nkubectl rollout status deployment/reservation -n test-hotel-reservation\nkubectl get pods -n test-hotel-reservation -o wide\nkubectl describe pod reservation-7894567890-abcde -n test-hotel-reservation\nkubectl logs reservation-7894567890-abcde -n test-hotel-reservation\nkubectl get events -n test-hotel-reservation --sort-by='.lastTimestamp' --field-selector type!=Normal",
+    "reasoning": "Root cause: The reservation deployment is using a wrong binary that does not support the latest gRPC version, leading to communication failures with other services. This results in reservation requests failing.",
+    "fault_category": "Image",
+    "symptoms": [
+      "ERROR: failed to send request: rpc error: code = Unimplemented desc = unknown service hotel.ReservationService",
+      "Events show 'CrashLoopBackOff' for the reservation pods",
+      ". Events show",
+      "ERROR: failed to send request: rpc error: code = Unimplemented desc = unknown service",
+      "CrashLoopBackOff' for the reservation pods"
+    ],
+    "context": {
+      "namespace": "test-hotel-reservation",
+      "resource_type": "Deployment",
+      "service": "reservation"
+    },
+    "outcomes": [
+      "Container image updated to correct version",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Pin image tags to immutable digests or explicit semver in all manifests. Never use :latest in production. Build multi-arch images with buildx in CI.",
+    "timestamp": 1777462194.5106382
+  },
+  {
+    "id": "kfrd_aoi_00089",
+    "problem": "Kubernetes Configuration fault in namespace 'astronomy-shop'. list[]: an empty list if no faults were detected. Symptoms: Listed all resources in astronomy-shop namespace. 25 pods all Running on kind-worker. opensearch-0 has 1 restart.",
+    "attempted_solutions": [
+      "kubectl get all -n astronomy-shop -o wide",
+      "kubectl describe pod opensearch-0 -n astronomy-shop",
+      "kubectl describe pod recommendation-bb8cffcd8-qk72v -n astronomy-shop",
+      "kubectl get deployment recommendation -n astronomy-shop -o yaml"
+    ],
+    "final_solution": "kubectl exec recommendation-bb8cffcd8-qk72v -n astronomy-shop -- python -c \"from openfeature import api; from openfeature.contrib.provider.flagd import FlagdProvider; client = api.get_client(); provider = FlagdProvider(host='flagd', port=8013); api.set_provider(provider); result = client.get_boolean_value('recommendationCacheFailure', False); print('recommendationCacheFailure flag value:', result)\"\nkubectl get configmap -n astronomy-shop -o name | grep -iE 'flag|feature'\nkubectl get configmap flagd-config -n astronomy-shop -o yaml",
+    "reasoning": "Root cause: Listed all resources in astronomy-shop namespace. 25 pods all Running on kind-worker. opensearch-0 has 1 restart.",
+    "fault_category": "Configuration",
+    "symptoms": [
+      "Listed all resources in astronomy-shop namespace",
+      "25 pods all Running on kind-worker",
+      "opensearch-0 has 1 restart",
+      "IPs in 10.244.1.74-103 range"
+    ],
+    "context": {
+      "namespace": "astronomy-shop",
+      "resource_type": "Deployment",
+      "service": "recommendation"
+    },
+    "outcomes": [
+      "Fault remediated; service restored to healthy state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Use Helm sync waves or init containers to ensure ConfigMaps/Secrets exist before Deployments. Validate RBAC requirements at design time with kubectl auth can-i dry-run checks in CI.",
+    "timestamp": 1777462194.5113373
+  },
+  {
+    "id": "kfrd_aoi_00090",
+    "problem": "Kubernetes Configuration fault in namespace 'test-hotel-reservation'. Your mitigation can be performed using any of the available APIs. Symptoms: Listed all pods with labels in test-hotel-reservation namespace. All 19 pods mostly Running. geo pod shows 3 restarts in 77s.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-hotel-reservation --show-labels",
+      "kubectl get deployments -n test-hotel-reservation -o wide",
+      "kubectl logs geo-c47ff745-ztdkt -n test-hotel-reservation --tail=50",
+      "kubectl get deployment geo -n test-hotel-reservation -o yaml",
+      "kubectl get service mongodb-geo -n test-hotel-reservation -o yaml"
+    ],
+    "final_solution": "kubectl patch service mongodb-geo -n test-hotel-reservation --type=json -p='[{\"op\": \"replace\", \"path\": \"/spec/ports/0/port\", \"value\": 27777}]'",
+    "reasoning": "Root cause: Listed all pods with labels in test-hotel-reservation namespace. All 19 pods mostly Running. geo pod shows 3 restarts in 77s.",
+    "fault_category": "Configuration",
+    "symptoms": [
+      "Listed all pods with labels in test-hotel-reservation namespace",
+      "All 19 pods mostly Running",
+      "geo pod shows 3 restarts in 77s",
+      "user pod has 1 restart"
+    ],
+    "context": {
+      "namespace": "test-hotel-reservation",
+      "resource_type": "Deployment"
+    },
+    "outcomes": [
+      "Fault remediated; service restored to healthy state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Use Helm sync waves or init containers to ensure ConfigMaps/Secrets exist before Deployments. Validate RBAC requirements at design time with kubectl auth can-i dry-run checks in CI.",
+    "timestamp": 1777462194.512734
+  },
+  {
+    "id": "kfrd_aoi_00091",
+    "problem": "Kubernetes Resource fault in namespace 'test-hotel-reservation'. Your mitigation can be performed using any of the available APIs. Symptoms: Listed all pods in test-hotel-reservation namespace. All 19 pods Running on kind-worker. IPs in 10.244.1.91-121 range.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-hotel-reservation -o wide",
+      "kubectl get services -n test-hotel-reservation -o wide",
+      "kubectl get deployment consul -n test-hotel-reservation -o yaml",
+      "kubectl get service consul -n test-hotel-reservation -o yaml",
+      "cat > /tmp/consul-service-fixed.yaml << 'EOF'"
+    ],
+    "final_solution": "kubectl delete service consul -n test-hotel-reservation\nkubectl create -f /tmp/consul-service-fixed.yaml",
+    "reasoning": "Root cause: Listed all pods in test-hotel-reservation namespace. All 19 pods Running on kind-worker. IPs in 10.",
+    "fault_category": "Resource",
+    "symptoms": [
+      "Listed all pods in test-hotel-reservation namespace",
+      "All 19 pods Running on kind-worker",
+      "IPs in 10.244.1.91-121 range",
+      "No restarts"
+    ],
+    "context": {
+      "namespace": "test-hotel-reservation",
+      "resource_type": "Deployment"
+    },
+    "outcomes": [
+      "Fault remediated; service restored to healthy state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Set resource requests and limits for all containers. Enable VPA or HPA for auto-scaling. Alert at 80% of quota/limit utilisation.",
+    "timestamp": 1777462194.513653
+  },
+  {
+    "id": "kfrd_aoi_00092",
+    "problem": "Kubernetes Scheduling fault in namespace 'test-social-network'. Your mitigation can be performed using any of the available APIs. Symptoms: Listed all pods with labels in test-social-network namespace. All 26 pods Running. Notable: no user-service pod present despite other services running.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-social-network --show-labels",
+      "kubectl get deployments -n test-social-network -o wide",
+      "kubectl get deployment user-service -n test-social-network -o yaml"
+    ],
+    "final_solution": "kubectl scale deployment user-service -n test-social-network --replicas=1",
+    "reasoning": "Root cause: Listed all pods with labels in test-social-network namespace. All 26 pods Running. Notable: no user-service pod present despite other services running.",
+    "fault_category": "Scheduling",
+    "symptoms": [
+      "Listed all pods with labels in test-social-network namespace",
+      "All 26 pods Running",
+      "Notable: no user-service pod present despite other services running",
+      "Labels use app and service naming convention"
+    ],
+    "context": {
+      "namespace": "test-social-network",
+      "resource_type": "Deployment"
+    },
+    "outcomes": [
+      "Deployment scaled; pods available",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Verify nodeSelector/affinity labels exist on target nodes before deploy. Use PreferredDuringScheduling unless strict isolation is required. Set accurate resource requests so the scheduler can place pods.",
+    "timestamp": 1777462194.5137424
+  }
+]
