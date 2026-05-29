@@ -1,0 +1,2089 @@
+[
+  {
+    "id": "kfrd_aoi_00000",
+    "problem": "Kubernetes Network fault in namespace 'astronomy-shop'. You are requested to identify the service(s) where the root cause of the fault lies. Affected: Pods like ad-5689665cc5-kr27x, namespace astronomy-shop, service ad, deployment ad. Symptoms: Readiness probe failed: HTTP probe failed with statuscode: 503.. PodReadyToStartContainers False ReadinessProbeFailed.. failed: HTTP probe failed with statuscode: 503.",
+    "attempted_solutions": [
+      "kubectl get pods -n astronomy-shop -o wide",
+      "kubectl get services -n astronomy-shop -o wide",
+      "kubectl get events -n astronomy-shop --sort-by='.lastTimestamp' --field-selector type!=Normal | tail -50",
+      "kubectl describe pod ad-5689665cc5-kr27x -n astronomy-shop",
+      "kubectl logs ad-5689665cc5-kr27x -n astronomy-shop --tail=50",
+      "kubectl get deployment ad -n astronomy-shop -o yaml"
+    ],
+    "final_solution": "kubectl exec ad-5689665cc5-kr27x -n astronomy-shop -- curl -v http://localhost:8080/health\nkubectl patch deployment ad -n astronomy-shop -p '{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"ad\",\"readinessProbe\":{\"initialDelaySeconds\":10,\"periodSeconds\":5}}]}}}}'\nkubectl rollout restart deployment/ad -n astronomy-shop\nkubectl get pods -n astronomy-shop -o wide\nkubectl describe pod ad-5689665cc5-kr27x -n astronomy-shop\nkubectl logs ad-5689665cc5-kr27x -n astronomy-shop --tail=50",
+    "reasoning": "Root cause: The ad-service deployment has a misconfigured readiness probe that causes the pods to be marked as not ready, leading to service unavailability. This results in users not seeing advertisements and potential revenue loss.",
+    "fault_category": "Network",
+    "symptoms": [
+      "Readiness probe failed: HTTP probe failed with statuscode: 503.",
+      "PodReadyToStartContainers False ReadinessProbeFailed.",
+      "failed: HTTP probe failed with statuscode: 503"
+    ],
+    "context": {
+      "namespace": "astronomy-shop",
+      "resource_type": "Deployment"
+    },
+    "outcomes": [
+      "Pods restarted and returned to Running state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Validate service targetPort matches containerPort before deploy. Document required traffic flows before applying NetworkPolicy. Use IngressClass with health checks.",
+    "timestamp": 1777462194.4879391
+  },
+  {
+    "id": "kfrd_aoi_00001",
+    "problem": "Kubernetes Configuration fault in namespace 'astronomy-shop'. Detect anomalies in the ad service. Affected: Pod ad-5689665cc5-mfnz7, namespace astronomy-shop, service ad. Symptoms: Error: failed to start application: missing required environment variable API_KEY. Events show 'CrashLoopBackOff' and 'Back-off restarting failed container. CrashLoopBackOff.",
+    "attempted_solutions": [
+      "kubectl get pods -n astronomy-shop -o wide",
+      "kubectl get services -n astronomy-shop -o wide",
+      "kubectl get deployments,statefulsets -n astronomy-shop -o wide",
+      "kubectl get events -n astronomy-shop --sort-by='.lastTimestamp' --field-selector type!=Normal",
+      "kubectl describe pod ad-5689665cc5-mfnz7 -n astronomy-shop",
+      "kubectl logs ad-5689665cc5-mfnz7 -n astronomy-shop --tail=50"
+    ],
+    "final_solution": "kubectl set env deployment/ad API_KEY=your-secret-api-key -n astronomy-shop\nkubectl rollout restart deployment/ad -n astronomy-shop\nkubectl get pods -n astronomy-shop -l opentelemetry.io/name=ad -o wide\nkubectl describe pod ad-5689665cc5-mfnz7 -n astronomy-shop\nkubectl logs ad-5689665cc5-mfnz7 -n astronomy-shop --tail=50",
+    "reasoning": "Root cause: The ad service pod is crashing due to a misconfigured environment variable that causes the application to fail on startup. This results in the service being unavailable and frequent pod restarts.",
+    "fault_category": "Configuration",
+    "symptoms": [
+      "Error: failed to start application: missing required environment variable API_KEY",
+      "Events show 'CrashLoopBackOff' and 'Back-off restarting failed container",
+      "CrashLoopBackOff",
+      "Back-off restarting failed container",
+      "CrashLoopBackOff' and 'Back-off restarting failed container"
+    ],
+    "context": {
+      "namespace": "astronomy-shop",
+      "resource_type": "Service",
+      "pod": "ad-5689665cc5-mfnz7"
+    },
+    "outcomes": [
+      "Environment variable or resource limit applied to deployment",
+      "Pods restarted and returned to Running state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Use Helm sync waves or init containers to ensure ConfigMaps/Secrets exist before Deployments. Validate RBAC requirements at design time with kubectl auth can-i dry-run checks in CI.",
+    "timestamp": 1777462194.488478
+  },
+  {
+    "id": "kfrd_aoi_00002",
+    "problem": "Kubernetes Resource fault in namespace 'astronomy-shop'. Identify the service(s) where the root cause of the high CPU usage lies. Affected: Pod ad-5689665cc5-7nbp4, namespace astronomy-shop, service ad. Symptoms: High CPU usage detected', 'Image processing task took 500ms', 'Too many open files', 'GC overhead limit exceeded. Events show 'PodCPUUtilizationExceeded' and 'ContainerOOMKilled. High CPU usage detected.",
+    "attempted_solutions": [
+      "kubectl get pods -n astronomy-shop -o wide",
+      "kubectl describe pod ad-5689665cc5-7nbp4 -n astronomy-shop",
+      "kubectl get events -n astronomy-shop --sort-by='.lastTimestamp' --field-selector type!=Normal",
+      "kubectl logs ad-5689665cc5-7nbp4 -n astronomy-shop --tail=100",
+      "kubectl top pod ad-5689665cc5-7nbp4 -n astronomy-shop",
+      "kubectl get service ad -n astronomy-shop -o yaml"
+    ],
+    "final_solution": "kubectl set resources deployment/ad -n astronomy-shop --limits=cpu=2 --requests=cpu=1\nkubectl rollout restart deployment/ad -n astronomy-shop\nkubectl get pods -n astronomy-shop -o wide\nkubectl describe pod ad-5689665cc5-7nbp4 -n astronomy-shop\nkubectl logs ad-5689665cc5-7nbp4 -n astronomy-shop --tail=100",
+    "reasoning": "Root cause: The ad service is experiencing high CPU usage due to an inefficient image processing algorithm in the application code, which is triggered frequently by incoming requests. This causes the pod to be throttled and results in degraded performance.",
+    "fault_category": "Resource",
+    "symptoms": [
+      "High CPU usage detected', 'Image processing task took 500ms', 'Too many open files', 'GC overhead limit exceeded",
+      "Events show 'PodCPUUtilizationExceeded' and 'ContainerOOMKilled",
+      "High CPU usage detected",
+      "Image processing task took 500ms",
+      "Too many open files"
+    ],
+    "context": {
+      "namespace": "astronomy-shop",
+      "resource_type": "Service",
+      "pod": "ad-5689665cc5-7nbp4"
+    },
+    "outcomes": [
+      "Environment variable or resource limit applied to deployment",
+      "Pods restarted and returned to Running state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Set resource requests and limits for all containers. Enable VPA or HPA for auto-scaling. Alert at 80% of quota/limit utilisation.",
+    "timestamp": 1777462194.4887114
+  },
+  {
+    "id": "kfrd_aoi_00003",
+    "problem": "Kubernetes Scheduling fault in namespace 'test-social-network'. The task is to identify and resolve the issue where pods are being scheduled to a non-existent node due to a misconfigured nodeSelector. Symptoms: Root cause and symptoms: The user-service deployment is configured with a nodeSelector that references a non-existent no.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-social-network -o wide",
+      "kubectl describe pod user-service-5b549cc8dc-xk5bj -n test-social-network",
+      "kubectl get nodes -o wide",
+      "kubectl get deployment user-service -n test-social-network -o yaml",
+      "kubectl get events -n test-social-network --sort-by='.lastTimestamp' --field-selector type!=Normal | tail -30",
+      "kubectl get pods -n test-social-network --field-selector=status.phase=Pending -o wide"
+    ],
+    "final_solution": "kubectl patch deployment user-service -n test-social-network -p '{\"spec\":{\"template\":{\"spec\":{\"nodeSelector\":{}}}}'\nkubectl get pods -n test-social-network -o wide\nkubectl describe pod user-service-5b549cc8dc-xk5bj -n test-social-network\nkubectl get deployment user-service -n test-social-network -o yaml\nkubectl get pods -n test-social-network --field-selector=status.phase=Pending -o wide\nkubectl get events -n test-social-network --field-selector type=Warning --sort-by='.lastTimestamp' | tail -50",
+    "reasoning": "Root cause: Root cause and symptoms: The user-service deployment is configured with a nodeSelector that references a non-existent node labeled 'kubernetes. io/hostname: extra-node'. This causes pods to remain in Pending state as the scheduler cannot find a matching node.",
+    "fault_category": "Scheduling",
+    "symptoms": [
+      "Root cause and symptoms: The user-service deployment is configured with a nodeSelector that references a non-existent no"
+    ],
+    "context": {
+      "namespace": "test-social-network",
+      "resource_type": "Deployment",
+      "pod": "user-service-5b549cc8dc-xk5bj"
+    },
+    "outcomes": [
+      "Fault remediated; service restored to healthy state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Verify nodeSelector/affinity labels exist on target nodes before deploy. Use PreferredDuringScheduling unless strict isolation is required. Set accurate resource requests so the scheduler can place pods.",
+    "timestamp": 1777462194.4889703
+  },
+  {
+    "id": "kfrd_aoi_00004",
+    "problem": "Kubernetes Scheduling fault in namespace 'test-social-network'. Mitigate the issue where the user-service deployment is configured to assign pods to a non-existent node, causing scheduling failures and service unavailability. Affected: Pods like user-service-5b549cc8dc-4wfmd, namespace test-social-network, service user-service, nodes with labels 'kubernetes. Symptoms: 0/3 nodes are available: 1 node(s) had taints that the pod did not tolerate, 2 node(s) didn. Events show. FailedScheduling.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-social-network",
+      "kubectl get deployments -n test-social-network",
+      "kubectl describe deployment user-service -n test-social-network",
+      "kubectl get pods -n test-social-network -l service=user-service",
+      "kubectl get events -n test-social-network --sort-by='.lastTimestamp' --field-selector involvedObject.name=user-service-5b549cc8dc-4wfmd",
+      "kubectl describe pod user-service-5b549cc8dc-4wfmd -n test-social-network"
+    ],
+    "final_solution": "kubectl patch deployment user-service -n test-social-network --type='json' -p='[{\"op\": \"remove\", \"path\": \"/spec/template/spec/nodeSelector\"}]'\nkubectl rollout status deployment/user-service -n test-social-network\nkubectl get pods -n test-social-network -l service=user-service\nkubectl describe pod user-service-5b549cc8dc-4wfmd -n test-social-network\nkubectl logs user-service-5b549cc8dc-4wfmd -n test-social-network\nkubectl get pods -n test-social-network",
+    "reasoning": "Root cause: The user-service deployment has a node affinity rule that specifies a non-existent node label, causing pods to remain in Pending state. This results in the service being unavailable.",
+    "fault_category": "Scheduling",
+    "symptoms": [
+      "0/3 nodes are available: 1 node(s) had taints that the pod did not tolerate, 2 node(s) didn",
+      "Events show",
+      "FailedScheduling"
+    ],
+    "context": {
+      "namespace": "test-social-network",
+      "resource_type": "Deployment"
+    },
+    "outcomes": [
+      "Fault remediated; service restored to healthy state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Verify nodeSelector/affinity labels exist on target nodes before deploy. Use PreferredDuringScheduling unless strict isolation is required. Set accurate resource requests so the scheduler can place pods.",
+    "timestamp": 1777462194.489192
+  },
+  {
+    "id": "kfrd_aoi_00005",
+    "problem": "Kubernetes Scheduling fault in namespace 'test-social-network'. Analyze the service's state and telemetry to identify and resolve the root cause of the fault. Symptoms: The deployment 'user-service' has a nodeSelector set to 'kubernetes.io/hostname: extra-node', which is invalid..",
+    "attempted_solutions": [
+      "kubectl get pods -n test-social-network -o wide",
+      "kubectl describe pod user-service-5b549cc8dc-xk5bj -n test-social-network",
+      "kubectl get nodes -o wide",
+      "kubectl get deployment user-service -n test-social-network -o yaml",
+      "kubectl get services -n test-social-network -o wide",
+      "kubectl get endpoints user-service -n test-social-network -o yaml"
+    ],
+    "final_solution": "kubectl patch deployment user-service -n test-social-network -p '{\"spec\":{\"template\":{\"spec\":{\"nodeSelector\":{\"kubernetes.io/hostname\":\"node1\"}}}}}'\nkubectl rollout restart deployment/user-service -n test-social-network\nkubectl get pods -n test-social-network -o wide\nkubectl describe pod user-service-5b549cc8dc-xk5bj -n test-social-network",
+    "reasoning": "Root cause: Root Cause and Symptoms: The user-service deployment is configured to schedule pods on a non-existent node labeled 'kubernetes. io/hostname: extra-node', leading to pods being stuck in Pending state. Symptoms include failed pod scheduling, unavailability of the user-service, and error messages related to node unavailability.",
+    "fault_category": "Scheduling",
+    "symptoms": [
+      "The deployment 'user-service' has a nodeSelector set to 'kubernetes.io/hostname: extra-node', which is invalid."
+    ],
+    "context": {
+      "namespace": "test-social-network",
+      "resource_type": "Deployment",
+      "pod": "user-service-5b549cc8dc-xk5bj"
+    },
+    "outcomes": [
+      "Pods restarted and returned to Running state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Verify nodeSelector/affinity labels exist on target nodes before deploy. Use PreferredDuringScheduling unless strict isolation is required. Set accurate resource requests so the scheduler can place pods.",
+    "timestamp": 1777462194.4895709
+  },
+  {
+    "id": "kfrd_aoi_00006",
+    "problem": "Kubernetes Scheduling fault in namespace 'test-social-network'. Detect anomalies in the service's deployment configuration that prevent proper scheduling of pods. Affected: Pods like user-service-5b549cc8dc-4wfmd, namespace test-social-network, service user-service, nodes with labels 'kubernetes. Symptoms: 0/3 nodes are available: 1 node(s) had taints that the pod did not tolerate, 2 node(s) didn. Events show. FailedScheduling.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-social-network -o wide",
+      "kubectl describe pod user-service-5b549cc8dc-4wfmd -n test-social-network",
+      "kubectl get deployments -n test-social-network -o wide",
+      "kubectl get nodes -o wide",
+      "kubectl get deployment user-service -n test-social-network -o yaml",
+      "kubectl logs user-service-5b549cc8dc-4wfmd -n test-social-network --tail=50"
+    ],
+    "final_solution": "kubectl patch deployment user-service -n test-social-network -p '{\"spec\":{\"template\":{\"spec\":{\"nodeSelector\":{\"kubernetes\\.io/hostname\":\"existing-node\"}}}}}'\nkubectl get pods -n test-social-network -o wide\nkubectl describe pod user-service-5b549cc8dc-4wfmd -n test-social-network\nkubectl logs user-service-5b549cc8dc-4wfmd -n test-social-network --tail=50\nkubectl get deployment user-service -n test-social-network -o yaml",
+    "reasoning": "Root cause: The user-service deployment has a node affinity rule that specifies a non-existent node label, causing pods to remain in Pending state. This results in the service being unavailable.",
+    "fault_category": "Scheduling",
+    "symptoms": [
+      "0/3 nodes are available: 1 node(s) had taints that the pod did not tolerate, 2 node(s) didn",
+      "Events show",
+      "FailedScheduling"
+    ],
+    "context": {
+      "namespace": "test-social-network",
+      "resource_type": "Deployment"
+    },
+    "outcomes": [
+      "Fault remediated; service restored to healthy state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Verify nodeSelector/affinity labels exist on target nodes before deploy. Use PreferredDuringScheduling unless strict isolation is required. Set accurate resource requests so the scheduler can place pods.",
+    "timestamp": 1777462194.4898689
+  },
+  {
+    "id": "kfrd_aoi_00007",
+    "problem": "Kubernetes Resource fault in namespace 'astronomy-shop'. You are requested to identify the service(s) where the root cause of the fault lies. Affected: Pods like ad-5689665cc5-7nbp4, namespace astronomy-shop, service ad. Symptoms: High CPU usage detected', 'Container is using more CPU than requested', 'Pod is being throttled by the CPU cgroup. Events show 'Pod is being throttled. High CPU usage detected.",
+    "attempted_solutions": [
+      "kubectl get pods -n astronomy-shop -o wide",
+      "kubectl get deployments -n astronomy-shop -o wide",
+      "kubectl get hpa -n astronomy-shop -o wide",
+      "kubectl describe pod ad-5689665cc5-7nbp4 -n astronomy-shop",
+      "kubectl logs ad-5689665cc5-7nbp4 -n astronomy-shop --tail=50",
+      "kubectl get events -n astronomy-shop --field-selector involvedObject.name=ad-5689665cc5-7nbp4 --sort-by='.lastTimestamp'"
+    ],
+    "final_solution": "kubectl set resources deployment/ad -n astronomy-shop --limits=cpu=2 --requests=cpu=1\nkubectl autoscale deployment ad -n astronomy-shop --min=2 --max=5 --cpu-percent=80\nkubectl get hpa -n astronomy-shop -o wide\nkubectl get pods -n astronomy-shop -o wide\nkubectl describe pod ad-5689665cc5-7nbp4 -n astronomy-shop\nkubectl logs ad-5689665cc5-7nbp4 -n astronomy-shop --tail=50",
+    "reasoning": "Root cause: The ad service deployment is experiencing high CPU usage due to a misconfigured autoscaling policy and lack of CPU limits, causing the pods to be throttled and the service to become unresponsive.",
+    "fault_category": "Resource",
+    "symptoms": [
+      "High CPU usage detected', 'Container is using more CPU than requested', 'Pod is being throttled by the CPU cgroup",
+      "Events show 'Pod is being throttled",
+      "High CPU usage detected",
+      "Container is using more CPU than requested",
+      "Pod is being throttled by the CPU cgroup"
+    ],
+    "context": {
+      "namespace": "astronomy-shop",
+      "resource_type": "Deployment"
+    },
+    "outcomes": [
+      "Environment variable or resource limit applied to deployment",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Set resource requests and limits for all containers. Enable VPA or HPA for auto-scaling. Alert at 80% of quota/limit utilisation.",
+    "timestamp": 1777462194.4900734
+  },
+  {
+    "id": "kfrd_aoi_00008",
+    "problem": "Kubernetes Resource fault in namespace 'astronomy-shop'. Detect anomalies in the ad service which is experiencing high CPU usage. Affected: Pods like ad-service-786f478978-2qjkl, namespace astronomy-shop, service ad-service. Symptoms: CPU usage exceeds the limit for container ad-service.' Logs show repeated queries with high computational complexity. Events show 'Container is being throttled due to CPU limits. CPU usage exceeds the limit for container ad-service..",
+    "attempted_solutions": [
+      "kubectl get pods -n astronomy-shop -o wide",
+      "kubectl get services -n astronomy-shop -o wide",
+      "kubectl get events -n astronomy-shop --sort-by='.lastTimestamp' --field-selector type!=Normal | tail -50",
+      "kubectl top pods -n astronomy-shop --containers",
+      "kubectl describe pods -n astronomy-shop | grep -A 10 -E '(Name:|State:|Restart Count:|Requests:|Limits:|Conditions:)'",
+      "kubectl describe pod ad-service-786f478978-2qjkl -n astronomy-shop"
+    ],
+    "final_solution": "kubectl exec -n astronomy-shop ad-service-786f478978-2qjkl -- ps aux\nkubectl set resources deployment/ad-service -n astronomy-shop --cpu=2 --memory=2Gi\nkubectl rollout restart deployment/ad-service -n astronomy-shop\nkubectl get pods -n astronomy-shop -o wide\nkubectl describe pod ad-service-786f478978-2qjkl -n astronomy-shop\nkubectl logs ad-service-786f478978-2qjkl -n astronomy-shop --tail=100",
+    "reasoning": "Root cause: The ad-service deployment is experiencing high CPU usage due to an inefficient query in the recommendation algorithm, causing the pods to be throttled and leading to slow response times.",
+    "fault_category": "Resource",
+    "symptoms": [
+      "CPU usage exceeds the limit for container ad-service.' Logs show repeated queries with high computational complexity",
+      "Events show 'Container is being throttled due to CPU limits",
+      "CPU usage exceeds the limit for container ad-service.",
+      "Container is being throttled due to CPU limits."
+    ],
+    "context": {
+      "namespace": "astronomy-shop",
+      "resource_type": "Deployment"
+    },
+    "outcomes": [
+      "Environment variable or resource limit applied to deployment",
+      "Pods restarted and returned to Running state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Set resource requests and limits for all containers. Enable VPA or HPA for auto-scaling. Alert at 80% of quota/limit utilisation.",
+    "timestamp": 1777462194.4903417
+  },
+  {
+    "id": "kfrd_aoi_00009",
+    "problem": "Kubernetes Resource fault in namespace 'astronomy-shop'. Identify the service(s) where the root cause of the fault lies, specifically related to manual garbage collection (GC) issues in the ad service. Affected: Pod ad-5689665cc5-7ptc6, namespace astronomy-shop, service ad. Symptoms: This is due to an improperly configured JVM garbage collection strategy and insufficient memory allocation. GC pause time exceeded threshold', 'Full GC triggered manually', 'Heap memory usage at 95%. Logs show frequent Full GC events and high memory utilization.",
+    "attempted_solutions": [
+      "kubectl get pods -n astronomy-shop -o wide",
+      "kubectl get events -n astronomy-shop --sort-by='.lastTimestamp' --field-selector type=Warning",
+      "kubectl get services -n astronomy-shop -o wide",
+      "kubectl get deployments -n astronomy-shop -o wide",
+      "kubectl describe pod ad-5689665cc5-7ptc6 -n astronomy-shop",
+      "kubectl logs ad-5689665cc5-7ptc6 -n astronomy-shop --tail=50"
+    ],
+    "final_solution": "kubectl set env deployment/ad JAVA_TOOL_OPTIONS='-Xms512m -Xmx1024m -XX:+UseG1GC'\nkubectl rollout restart deployment/ad -n astronomy-shop\nkubectl get pods -n astronomy-shop -l opentelemetry.io/name=ad\nkubectl describe pod ad-5689665cc5-7ptc6 -n astronomy-shop\nkubectl logs ad-5689665cc5-7ptc6 -n astronomy-shop --tail=50",
+    "reasoning": "Root cause: The ad service deployment is experiencing excessive manual garbage collection pauses, leading to high latency and potential service unavailability. This is due to an improperly configured JVM garbage collection strategy and insufficient memory allocation.",
+    "fault_category": "Resource",
+    "symptoms": [
+      "This is due to an improperly configured JVM garbage collection strategy and insufficient memory allocation",
+      "GC pause time exceeded threshold', 'Full GC triggered manually', 'Heap memory usage at 95%",
+      "Logs show frequent Full GC events and high memory utilization",
+      "GC pause time exceeded threshold",
+      "Full GC triggered manually"
+    ],
+    "context": {
+      "namespace": "astronomy-shop",
+      "resource_type": "Deployment",
+      "pod": "ad-5689665cc5-7ptc6"
+    },
+    "outcomes": [
+      "Environment variable or resource limit applied to deployment",
+      "Pods restarted and returned to Running state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Set resource requests and limits for all containers. Enable VPA or HPA for auto-scaling. Alert at 80% of quota/limit utilisation.",
+    "timestamp": 1777462194.4905612
+  },
+  {
+    "id": "kfrd_aoi_00010",
+    "problem": "Kubernetes Resource fault in namespace 'astronomy-shop'. Detect anomalies related to manual garbage collection (GC) issues in the ad-service deployment. Affected: Pods like ad-service-7df8586894-2qjkl, namespace astronomy-shop, service ad-service. Symptoms: GC pause duration exceeded 1000ms', 'High GC rate detected', 'JVM memory usage spiking to 95%. Events show 'Pod status: CrashLoopBackOff. GC pause duration exceeded 1000ms.",
+    "attempted_solutions": [
+      "kubectl get pods -n astronomy-shop -o wide",
+      "kubectl get deployments -n astronomy-shop -o wide",
+      "kubectl describe pod ad-service-7df8586894-2qjkl -n astronomy-shop",
+      "kubectl logs ad-service-7df8586894-2qjkl -n astronomy-shop",
+      "kubectl get events -n astronomy-shop --sort-by='.lastTimestamp' --field-selector involvedObject.kind=Pod",
+      "kubectl get pod ad-service-7df8586894-2qjkl -n astronomy-shop -o yaml"
+    ],
+    "final_solution": "kubectl exec -n astronomy-shop ad-service-7df8586894-2qjkl -- jstat -gc\nkubectl exec -n astronomy-shop ad-service-7df8586894-2qjkl -- ps aux | grep java\nkubectl set env deployment/ad-service JAVA_OPTS='-Xms512m -Xmx512m -XX:+UseG1GC -XX:MaxGCPauseMillis=200' -n astronomy-shop\nkubectl rollout restart deployment/ad-service -n astronomy-shop\nkubectl get pods -n astronomy-shop -l app=ad-service\nkubectl describe pod ad-service-7df8586894-2qjkl -n astronomy-shop\nkubectl logs ad-service-7df8586894-2qjkl -n astronomy-shop",
+    "reasoning": "Root cause: The ad-service deployment is experiencing high latency and frequent GC pauses due to an improperly configured JVM garbage collection policy. This results in slow response times and potential timeouts for ad-related operations.",
+    "fault_category": "Resource",
+    "symptoms": [
+      "GC pause duration exceeded 1000ms', 'High GC rate detected', 'JVM memory usage spiking to 95%",
+      "Events show 'Pod status: CrashLoopBackOff",
+      "GC pause duration exceeded 1000ms",
+      "High GC rate detected",
+      "JVM memory usage spiking to 95%"
+    ],
+    "context": {
+      "namespace": "astronomy-shop",
+      "resource_type": "Deployment"
+    },
+    "outcomes": [
+      "Environment variable or resource limit applied to deployment",
+      "Pods restarted and returned to Running state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Set resource requests and limits for all containers. Enable VPA or HPA for auto-scaling. Alert at 80% of quota/limit utilisation.",
+    "timestamp": 1777462194.490758
+  },
+  {
+    "id": "kfrd_aoi_00011",
+    "problem": "Kubernetes Image fault in namespace 'astronomy-shop'. You are requested to identify the service(s) where the root cause of the fault lies. Affected: Pods like image-provider-7784cfd55c-slgrf, namespace astronomy-shop, service image-provider. Symptoms: Error pulling image \"astronomy-shop/image-provider:latest\": unauthorized: authentication required. Logs show repeated image pull attempts and high latency in image loading. Events show 'ImagePullBackOff' for the image-provider pods.",
+    "attempted_solutions": [
+      "kubectl get pods -n astronomy-shop -o wide",
+      "kubectl get services -n astronomy-shop -o wide",
+      "kubectl get events -n astronomy-shop --sort-by='.lastTimestamp' --field-selector type!=Normal",
+      "kubectl describe pod image-provider-7784cfd55c-slgrf -n astronomy-shop",
+      "kubectl get deployment image-provider -n astronomy-shop -o yaml",
+      "kubectl get service image-provider -n astronomy-shop -o yaml"
+    ],
+    "final_solution": "kubectl patch deployment image-provider -n astronomy-shop -p '{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"image-provider\",\"imagePullPolicy\":\"IfNotPresent\"}]}}}}'\nkubectl rollout status deployment/image-provider -n astronomy-shop\nkubectl get pods -n astronomy-shop -o wide | grep image-provider\nkubectl describe pod image-provider-7784cfd55c-slgrf -n astronomy-shop\nkubectl logs image-provider-7784cfd55c-slgrf -n astronomy-shop",
+    "reasoning": "Root cause: The image-provider service is experiencing slow load times due to a misconfigured image pull policy that forces re-downloading of large images from a remote registry every time a pod is restarted. This results in increased latency when accessing image data.",
+    "fault_category": "Image",
+    "symptoms": [
+      "Error pulling image \"astronomy-shop/image-provider:latest\": unauthorized: authentication required",
+      "Logs show repeated image pull attempts and high latency in image loading",
+      "Events show 'ImagePullBackOff' for the image-provider pods",
+      "ImagePullBackOff",
+      "astronomy-shop/image-provider:latest"
+    ],
+    "context": {
+      "namespace": "astronomy-shop",
+      "resource_type": "Service",
+      "service": "image-provider"
+    },
+    "outcomes": [
+      "Fault remediated; service restored to healthy state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Pin image tags to immutable digests or explicit semver in all manifests. Never use :latest in production. Build multi-arch images with buildx in CI.",
+    "timestamp": 1777462194.4910696
+  },
+  {
+    "id": "kfrd_aoi_00012",
+    "problem": "Kubernetes Image fault in namespace 'astronomy-shop'. Detect anomalies related to slow image load times in the image-provider service. Affected: Pods like image-provider-7784cfd55c-zkb47, namespace astronomy-shop, service image-provider, PVCs using the slow storage class. Symptoms: Read timeout exceeded for image retrieval request' in application logs. Events show 'PodScheduled' but with long startup times. Read timeout exceeded for image retrieval request.",
+    "attempted_solutions": [
+      "kubectl get pods -n astronomy-shop -o wide",
+      "kubectl get services -n astronomy-shop -o wide",
+      "kubectl get events -n astronomy-shop --sort-by='.lastTimestamp' --field-selector type!=Normal | tail -50",
+      "kubectl describe pod image-provider-7784cfd55c-zkb47 -n astronomy-shop",
+      "kubectl get pvc -n astronomy-shop",
+      "kubectl get storageclass -n astronomy-shop"
+    ],
+    "final_solution": "kubectl patch storageclass slow-storage -n astronomy-shop -p '{\"metadata\":{\"annotations\":{\"storageclass.kubernetes.io/is-default-class\":\"false\"}}}'\nkubectl create storageclass fast-storage --provisioner=kubernetes.io/aws-ebs --parameters=type=gp3 --allow-volume-expansion=true\nkubectl patch pvc image-provider-pvc -n astronomy-shop -p '{\"spec\":{\"storageClassName\":\"fast-storage\"}}'\nkubectl get pods -n astronomy-shop -o wide\nkubectl describe pod image-provider-7784cfd55c-zkb47 -n astronomy-shop\nkubectl logs image-provider-7784cfd55c-zkb47 -n astronomy-shop --tail=100",
+    "reasoning": "Root cause: The image-provider service is experiencing slow load times due to an improperly configured storage class that is causing I/O bottlenecks. This results in increased latency when retrieving product images.",
+    "fault_category": "Image",
+    "symptoms": [
+      "Read timeout exceeded for image retrieval request' in application logs",
+      "Events show 'PodScheduled' but with long startup times",
+      "Read timeout exceeded for image retrieval request",
+      "PodScheduled"
+    ],
+    "context": {
+      "namespace": "astronomy-shop",
+      "resource_type": "Service",
+      "service": "image-provider"
+    },
+    "outcomes": [
+      "Fault remediated; service restored to healthy state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Pin image tags to immutable digests or explicit semver in all manifests. Never use :latest in production. Build multi-arch images with buildx in CI.",
+    "timestamp": 1777462194.4913394
+  },
+  {
+    "id": "kfrd_aoi_00013",
+    "problem": "Kubernetes Network fault in namespace 'astronomy-shop'. You are requested to identify the service(s) where the root cause of the fault lies. Affected: Pods like payment-5cdcbc7597-zvp2x, checkout-74b5957d48-7thv5, namespace astronomy-shop, service payment. Symptoms: Events show 'Failed to connect to endpoint. connection refused. for payment service show no addresses, and.",
+    "attempted_solutions": [
+      "kubectl get pods -n astronomy-shop -o wide",
+      "kubectl get services -n astronomy-shop -o wide",
+      "kubectl get endpoints payment -n astronomy-shop",
+      "kubectl describe service payment -n astronomy-shop",
+      "kubectl get service payment -n astronomy-shop -o yaml",
+      "kubectl get pod payment-5cdcbc7597-zvp2x -n astronomy-shop -o yaml"
+    ],
+    "final_solution": "kubectl exec checkout-74b5957d48-7thv5 -n astronomy-shop -- nslookup payment.astronomy-shop.svc.cluster.local\nkubectl exec checkout-74b5957d48-7thv5 -n astronomy-shop -- nc -zv payment 8080\nkubectl patch service payment -n astronomy-shop -p '{\"spec\":{\"ports\":[{\"port\":8080,\"targetPort\":8080}]}}'\nkubectl get endpoints payment -n astronomy-shop\nkubectl get pods -n astronomy-shop\nkubectl logs checkout-74b5957d48-7thv5 -n astronomy-shop --tail=100\nkubectl exec checkout-74b5957d48-7thv5 -n astronomy-shop -- nc -zv payment 8080",
+    "reasoning": "Root cause: The payment service is unreachable due to a misconfigured Service resource that points to an incorrect port, causing the checkout service to fail when attempting to connect. This results in payment processing failures.",
+    "fault_category": "Network",
+    "symptoms": [
+      "Events show 'Failed to connect to endpoint",
+      "connection refused",
+      "for payment service show no addresses, and",
+      "in application logs. Events show",
+      "Error connecting to payment service on port 8080' in application logs"
+    ],
+    "context": {
+      "namespace": "astronomy-shop",
+      "resource_type": "Service",
+      "service": "resource"
+    },
+    "outcomes": [
+      "Fault remediated; service restored to healthy state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Validate service targetPort matches containerPort before deploy. Document required traffic flows before applying NetworkPolicy. Use IngressClass with health checks.",
+    "timestamp": 1777462194.4915786
+  },
+  {
+    "id": "kfrd_aoi_00014",
+    "problem": "Kubernetes Network fault in namespace 'astronomy-shop'. Detect if the payment service is unreachable and identify the root cause. Affected: Pods like payment-5cdcbc7597-bdqks, checkout-74b5957d48-28zs5, namespace astronomy-shop, service payment, service checkout. Symptoms: Events show 'Endpoints not available. EndpointSlice for service payment has no addresses. Error connecting to payment service.",
+    "attempted_solutions": [
+      "kubectl get pods -n astronomy-shop --show-labels -o wide",
+      "kubectl get services,deployments,statefulsets -n astronomy-shop -o wide",
+      "kubectl get events -n astronomy-shop --sort-by='.lastTimestamp' --field-selector type!=Normal",
+      "kubectl get service payment -n astronomy-shop -o yaml",
+      "kubectl get deployment payment -n astronomy-shop -o yaml",
+      "kubectl get service checkout -n astronomy-shop -o yaml"
+    ],
+    "final_solution": "kubectl patch deployment checkout -n astronomy-shop -p '{\"spec\":{\"selector\":{\"matchLabels\":{\"app\":\"payment\"}}}}'\nkubectl get endpoints payment -n astronomy-shop -o yaml\nkubectl get pods -n astronomy-shop -l app=payment\nkubectl get pods -n astronomy-shop -l app=checkout\nkubectl describe service checkout -n astronomy-shop\nkubectl describe service payment -n astronomy-shop\nkubectl logs checkout-74b5957d48-28zs5 -n astronomy-shop --tail=100 --timestamps",
+    "reasoning": "Root cause: The payment service is unreachable due to a misconfigured service selector in the checkout deployment, causing it to fail to route traffic to the payment service pods. This results in the checkout process being unable to process payments.",
+    "fault_category": "Network",
+    "symptoms": [
+      "Events show 'Endpoints not available",
+      "EndpointSlice for service payment has no addresses",
+      "Error connecting to payment service",
+      "No endpoints available for service payment",
+      "Endpoints not available"
+    ],
+    "context": {
+      "namespace": "astronomy-shop",
+      "resource_type": "Deployment",
+      "service": "selector"
+    },
+    "outcomes": [
+      "Fault remediated; service restored to healthy state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Validate service targetPort matches containerPort before deploy. Document required traffic flows before applying NetworkPolicy. Use IngressClass with health checks.",
+    "timestamp": 1777462194.4918284
+  },
+  {
+    "id": "kfrd_aoi_00015",
+    "problem": "Kubernetes Configuration fault in namespace 'astronomy-shop'. Detect anomalies in the product catalog service. Affected: Pods like product-catalog-75cb47c9-gcvng, namespace astronomy-shop, service product-catalog. Symptoms: Events show 'CrashLoopBackOff' for the product-catalog pod. Error loading product data from ConfigMap: invalid JSON format. Failed to fetch product list: 500 Internal Server Error.",
+    "attempted_solutions": [
+      "kubectl get pods -n astronomy-shop -o wide",
+      "kubectl get services -n astronomy-shop -o wide",
+      "kubectl get events -n astronomy-shop --sort-by='.lastTimestamp' --field-selector type!=Normal",
+      "kubectl logs product-catalog-75cb47c9-gcvng -n astronomy-shop --tail=50",
+      "kubectl describe pod product-catalog-75cb47c9-gcvng -n astronomy-shop",
+      "kubectl get configmap product-catalog-products -n astronomy-shop -o yaml"
+    ],
+    "final_solution": "kubectl apply -f corrected-product-catalog-products.yaml -n astronomy-shop\nkubectl rollout restart deployment/product-catalog -n astronomy-shop\nkubectl get pods -n astronomy-shop -o wide\nkubectl describe pod product-catalog-75cb47c9-gcvng -n astronomy-shop\nkubectl logs product-catalog-75cb47c9-gcvng -n astronomy-shop --tail=50",
+    "reasoning": "Root cause: The product-catalog service is failing due to a misconfigured ConfigMap that contains incorrect product data, leading to errors when the service attempts to load the product catalog. This results in the frontend service being unable to retrieve product data, causing user-visible errors during catalog view operations.",
+    "fault_category": "Configuration",
+    "symptoms": [
+      "Events show 'CrashLoopBackOff' for the product-catalog pod",
+      "Error loading product data from ConfigMap: invalid JSON format",
+      "Failed to fetch product list: 500 Internal Server Error",
+      "CrashLoopBackOff",
+      "Error loading product data from ConfigMap: invalid JSON format', 'Failed to fetch pro"
+    ],
+    "context": {
+      "namespace": "astronomy-shop",
+      "resource_type": "Service",
+      "service": "attempts"
+    },
+    "outcomes": [
+      "Kubernetes manifests applied; desired state reconciled",
+      "Pods restarted and returned to Running state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Use Helm sync waves or init containers to ensure ConfigMaps/Secrets exist before Deployments. Validate RBAC requirements at design time with kubectl auth can-i dry-run checks in CI.",
+    "timestamp": 1777462194.4920719
+  },
+  {
+    "id": "kfrd_aoi_00016",
+    "problem": "Kubernetes Configuration fault in namespace 'astronomy-shop'. Detect anomalies in the recommendation service related to cache failures. Affected: Pods like recommendation-bb8cffcd8-v9ngp, namespace astronomy-shop, service recommendation, Redis cache instance redis-main. Symptoms: redis: connection refused' in the recommendation service logs. Events show 'Failed to connect to Redis server. redis: connection refused.",
+    "attempted_solutions": [
+      "kubectl get pods -n astronomy-shop --show-labels",
+      "kubectl get services -n astronomy-shop -o wide",
+      "kubectl get deployments,statefulsets -n astronomy-shop -o wide",
+      "kubectl describe pod recommendation-bb8cffcd8-v9ngp -n astronomy-shop",
+      "kubectl get events -n astronomy-shop --sort-by='.lastTimestamp' --field-selector involvedObject.kind=Pod",
+      "kubectl logs recommendation-bb8cffcd8-v9ngp -n astronomy-shop --tail=100"
+    ],
+    "final_solution": "kubectl patch statefulset redis-main -n astronomy-shop -p '{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"redis\",\"env\":[{\"name\":\"REDIS_HOST\",\"value\":\"redis-main\"},{\"name\":\"REDIS_PORT\",\"value\":\"6379\"}]}}]}}}'\nkubectl rollout restart deployment recommendation -n astronomy-shop\nkubectl get pods -n astronomy-shop -l app.kubernetes.io/name=recommendation -o wide\nkubectl describe pod recommendation-bb8cffcd8-v9ngp -n astronomy-shop\nkubectl logs recommendation-bb8cffcd8-v9ngp -n astronomy-shop --tail=100",
+    "reasoning": "Root cause: The recommendation service is experiencing cache failures due to an improperly configured Redis cache, leading to frequent cache misses and degraded performance. This results in slow response times for product recommendations.",
+    "fault_category": "Configuration",
+    "symptoms": [
+      "redis: connection refused' in the recommendation service logs",
+      "Events show 'Failed to connect to Redis server",
+      "redis: connection refused",
+      "Failed to connect to Redis server"
+    ],
+    "context": {
+      "namespace": "astronomy-shop",
+      "resource_type": "Service",
+      "service": "recommendation"
+    },
+    "outcomes": [
+      "Pods restarted and returned to Running state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Use Helm sync waves or init containers to ensure ConfigMaps/Secrets exist before Deployments. Validate RBAC requirements at design time with kubectl auth can-i dry-run checks in CI.",
+    "timestamp": 1777462194.4923167
+  },
+  {
+    "id": "kfrd_aoi_00017",
+    "problem": "Kubernetes Configuration fault in namespace 'test-social-network'. Resolve an authentication issue where the MongoDB TLS certificate has expired, causing connection failures to the MongoDB instance. Affected: Pods like url-shorten-mongodb-756f87ffcf-zzvht, namespace test-social-network, service url-shorten-mongodb, MongoDB instance. Symptoms: SSL connection error: SSL error: certificate verify failed (certificate has expired). Events show 'Failed to connect to MongoDB: authentication failed. Failed to connect to MongoDB: authentication failed.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-social-network -l service=url-shorten-mongodb -o wide",
+      "kubectl describe pod url-shorten-mongodb-756f87ffcf-zzvht -n test-social-network",
+      "kubectl logs url-shorten-mongodb-756f87ffcf-zzvht -n test-social-network --tail=50",
+      "kubectl get secret mongodb-tls -n test-social-network -o yaml",
+      "kubectl get secret mongodb-tls -n test-social-network -o jsonpath='{.data.tls\\.pem}' | base64 -d | openssl x509 -noout -dates",
+      "kubectl get configmap url-shorten-mongodb -n test-social-network -o yaml"
+    ],
+    "final_solution": "kubectl exec url-shorten-mongodb-756f87ffcf-zzvht -n test-social-network -- mongo --eval 'db.adminCommand({getCmdLineOpts: 1})' --quiet\nkubectl delete secret mongodb-tls -n test-social-network\nkubectl create secret generic mongodb-tls -n test-social-network --from-file=tls.pem=/path/to/new/tls.pem\nkubectl apply -f url-shorten-mongodb-deployment.yaml -n test-social-network\nkubectl get pods -n test-social-network -l service=url-shorten-mongodb -o wide\nkubectl logs url-shorten-mongodb-756f87ffcf-zzvht -n test-social-network --tail=50",
+    "reasoning": "Root cause: The MongoDB TLS certificate used by the url-shorten-mongodb service has expired, leading to authentication failures and connection refusals. This results in the service being unable to interact with the database, causing operational disruptions.",
+    "fault_category": "Configuration",
+    "symptoms": [
+      "SSL connection error: SSL error: certificate verify failed (certificate has expired)",
+      "Events show 'Failed to connect to MongoDB: authentication failed",
+      "Failed to connect to MongoDB: authentication failed",
+      "error: SSL error: certificate verify failed (certificate has expired)"
+    ],
+    "context": {
+      "namespace": "test-social-network",
+      "resource_type": "Service",
+      "service": "has"
+    },
+    "outcomes": [
+      "Required Kubernetes object created and available to pods",
+      "Kubernetes manifests applied; desired state reconciled",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Use Helm sync waves or init containers to ensure ConfigMaps/Secrets exist before Deployments. Validate RBAC requirements at design time with kubectl auth can-i dry-run checks in CI.",
+    "timestamp": 1777462194.4925673
+  },
+  {
+    "id": "kfrd_aoi_00018",
+    "problem": "Kubernetes Configuration fault in namespace 'test-social-network'. Identify the service(s) where the root cause of the fault lies. Affected: Pods like url-shorten-service-7b4f9d6cfb-x2flp, url-shorten-mongodb-68975dfdb5-767qc, namespace test-social-network, service url-shorten-mongodb. Symptoms: Connection refused. TLS handshake failed. CrashLoopBackOff.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-social-network -o wide",
+      "kubectl describe pod url-shorten-service-7b4f9d6cfb-x2flp -n test-social-network",
+      "kubectl logs url-shorten-service-7b4f9d6cfb-x2flp -n test-social-network --tail=50",
+      "kubectl get service url-shorten-mongodb -n test-social-network -o yaml",
+      "kubectl describe pod url-shorten-mongodb-68975dfdb5-767qc -n test-social-network",
+      "kubectl logs url-shorten-mongodb-68975dfdb5-767qc -n test-social-network --tail=50"
+    ],
+    "final_solution": "kubectl exec url-shorten-mongodb-68975dfdb5-767qc -n test-social-network -- openssl x509 -in /etc/tls/tls.pem -noout -dates 2>/dev/null || echo 'Certificate check failed'\nkubectl patch secret mongodb-tls -n test-social-network -p '{\"data\":{\"tls.pem\":\"$(openssl x509 -in /path/to/correct-cert.pem -outform PEM | base64 -w 0)\"}}'\nkubectl rollout restart deployment url-shorten-service -n test-social-network\nkubectl get pods -n test-social-network -l app=url-shorten-service\nkubectl describe pod url-shorten-service-7b4f9d6cfb-x2flp -n test-social-network\nkubectl logs url-shorten-service-7b4f9d6cfb-x2flp -n test-social-network --tail=50",
+    "reasoning": "Root cause: The url-shorten-service is unable to connect to the url-shorten-mongodb due to a misconfigured TLS certificate, causing connection timeouts and failed RPC calls.",
+    "fault_category": "Configuration",
+    "symptoms": [
+      "Connection refused",
+      "TLS handshake failed",
+      "CrashLoopBackOff",
+      "failed' in mongodb logs, events show 'CrashLoopBackOff' for url-shorten-service"
+    ],
+    "context": {
+      "namespace": "test-social-network",
+      "resource_type": "Service",
+      "service": "url-shorten-mongodb"
+    },
+    "outcomes": [
+      "Pods restarted and returned to Running state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Use Helm sync waves or init containers to ensure ConfigMaps/Secrets exist before Deployments. Validate RBAC requirements at design time with kubectl auth can-i dry-run checks in CI.",
+    "timestamp": 1777462194.4928389
+  },
+  {
+    "id": "kfrd_aoi_00019",
+    "problem": "Kubernetes Configuration fault in namespace 'test-social-network'. Detect anomalies related to authentication misconfiguration in the MongoDB connection. Affected: Pods like url-shorten-mongodb-544fb9957-9zhjd, url-shorten-mongodb-77894f9b76-c8ms7, namespace test-social-network, service url-shorten-mongodb. Symptoms: TLS handshake failed', 'certificate expired', 'unable to connect to MongoDB. Events show 'CrashLoopBackOff' for the MongoDB pods. TLS handshake failed.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-social-network -o wide",
+      "kubectl describe pod url-shorten-mongodb-544fb9957-9zhjd -n test-social-network",
+      "kubectl logs url-shorten-mongodb-544fb9957-9zhjd -n test-social-network --tail=50",
+      "kubectl get secret mongodb-tls -n test-social-network -o yaml",
+      "kubectl get configmap url-shorten-mongodb -n test-social-network -o yaml",
+      "kubectl get pod url-shorten-mongodb-77894f9b76-c8ms7 -n test-social-network -o yaml | grep -A 30 'volumeMounts:\\|volumes:'"
+    ],
+    "final_solution": "kubectl exec url-shorten-mongodb-77894f9b76-c8ms7 -n test-social-network -- ls -la /etc/tls/\nkubectl exec url-shorten-mongodb-77894f9b76-c8ms7 -n test-social-network -- cat /etc/tls/tls.pem | openssl x509 -noout -dates\nkubectl get deployment url-shorten-mongodb -n test-social-network -o jsonpath='{.spec.template.spec.containers[0].volumeMounts}'\nkubectl get deployment url-shorten-mongodb -n test-social-network -o jsonpath='{.spec.template.spec.volumes}'\nkubectl patch secret mongodb-tls -n test-social-network -p '{\"data\":{\"tls.pem\":\"<new_base64_encoded_certificate>\"}}'\nkubectl rollout restart deployment/url-shorten-mongodb -n test-social-network\nkubectl get pods -n test-social-network -l app=url-shorten-mongodb -o wide\nkubectl describe pod url-shorten-mongodb-77894f9b76-c8ms7 -n test-social-network\nkubectl logs url-shorten-mongodb-77894f9b76-c8ms7 -n test-social-network --tail=50",
+    "reasoning": "Root cause: The MongoDB pods are failing to start due to a misconfigured TLS certificate, causing connection issues with the database. This results in the URL shortener service being unable to store or retrieve URLs.",
+    "fault_category": "Configuration",
+    "symptoms": [
+      "TLS handshake failed', 'certificate expired', 'unable to connect to MongoDB",
+      "Events show 'CrashLoopBackOff' for the MongoDB pods",
+      "TLS handshake failed",
+      "certificate expired",
+      "unable to connect to MongoDB"
+    ],
+    "context": {
+      "namespace": "test-social-network",
+      "resource_type": "Service"
+    },
+    "outcomes": [
+      "Pods restarted and returned to Running state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Use Helm sync waves or init containers to ensure ConfigMaps/Secrets exist before Deployments. Validate RBAC requirements at design time with kubectl auth can-i dry-run checks in CI.",
+    "timestamp": 1777462194.4930823
+  },
+  {
+    "id": "kfrd_aoi_00020",
+    "problem": "Kubernetes Network fault in namespace 'astronomy-shop'. You are requested to identify the service(s) where the root cause of the fault lies. Affected: Pods like cart-7dcff577fb-9pgxq, valkey-cart-6c6785f6b4-z8rs9, namespace astronomy-shop, service valkey-cart. Symptoms: Error connecting to Redis server: Connection refused' in cart service logs. Events show 'Endpoints not available' for valkey-cart. Error connecting to Redis server: Connection refused.",
+    "attempted_solutions": [
+      "kubectl get pods -n astronomy-shop -o wide",
+      "kubectl get services -n astronomy-shop -o wide",
+      "kubectl get deployments,statefulsets -n astronomy-shop -o wide",
+      "kubectl describe pod cart-7dcff577fb-9pgxq -n astronomy-shop",
+      "kubectl get events -n astronomy-shop --sort-by='.lastTimestamp' --field-selector type!=Normal",
+      "kubectl get endpoints valkey-cart -n astronomy-shop -o yaml"
+    ],
+    "final_solution": "kubectl exec -n astronomy-shop cart-7dcff577fb-9pgxq -- curl -v valkey-cart:6379\nkubectl edit service valkey-cart -n astronomy-shop\nkubectl get endpoints valkey-cart -n astronomy-shop\nkubectl get pods -n astronomy-shop -o wide\nkubectl describe pod cart-7dcff577fb-9pgxq -n astronomy-shop\nkubectl logs cart-7dcff577fb-9pgxq -n astronomy-shop",
+    "reasoning": "Root cause: The cart service is unable to communicate with the valkey-cart Redis service due to a misconfigured service selector in the valkey-cart service definition, causing the cart service to fail when attempting to access the Redis instance.",
+    "fault_category": "Network",
+    "symptoms": [
+      "Error connecting to Redis server: Connection refused' in cart service logs",
+      "Events show 'Endpoints not available' for valkey-cart",
+      "Error connecting to Redis server: Connection refused",
+      "Endpoints not available"
+    ],
+    "context": {
+      "namespace": "astronomy-shop",
+      "resource_type": "Service"
+    },
+    "outcomes": [
+      "Fault remediated; service restored to healthy state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Validate service targetPort matches containerPort before deploy. Document required traffic flows before applying NetworkPolicy. Use IngressClass with health checks.",
+    "timestamp": 1777462194.4933228
+  },
+  {
+    "id": "kfrd_aoi_00021",
+    "problem": "Kubernetes Network fault in namespace 'astronomy-shop'. The task is to detect if there are any anomalies in the service's operation. Affected: Pods like cart-7dcff577fb-rq4lf, service valkey-cart, and deployment cart in the namespace 'astronomy-shop'. Symptoms: The 'cart' service is experiencing high latency and intermittent failures due to a misconfigured Redis connection. redis connection refused' in the cart service logs. Events show 'Failed to connect to Redis server.",
+    "attempted_solutions": [
+      "kubectl get pods -n astronomy-shop",
+      "kubectl get services -n astronomy-shop",
+      "kubectl get endpoints valkey-cart -n astronomy-shop",
+      "kubectl describe service valkey-cart -n astronomy-shop",
+      "kubectl get pods -n astronomy-shop --field-selector=status.phase=Pending",
+      "kubectl describe pod cart-7dcff577fb-rq4lf -n astronomy-shop"
+    ],
+    "final_solution": "kubectl exec -n astronomy-shop cart-7dcff577fb-rq4lf -- nslookup valkey-cart\nkubectl get service valkey-cart -n astronomy-shop -o yaml\nkubectl get endpoints valkey-cart -n astronomy-shop -o yaml\nkubectl get deployment cart -n astronomy-shop -o yaml | grep -A 5 'env:'\nkubectl get service valkey-cart -n astronomy-shop\nkubectl patch service valkey-cart -n astronomy-shop -p '{\"spec\":{\"ports\":[{\"port\":6379,\"targetPort\":6379}]}}'\nkubectl get endpoints valkey-cart -n astronomy-shop\nkubectl get pods -n astronomy-shop\nkubectl logs cart-7dcff577fb-rq4lf -n astronomy-shop",
+    "reasoning": "Root cause: The 'cart' service is experiencing high latency and intermittent failures due to a misconfigured Redis connection. The service is configured to connect to a Redis instance named 'valkey-cart', but the Redis instance is not reachable due to incorrect service endpoints or network policies.",
+    "fault_category": "Network",
+    "symptoms": [
+      "The 'cart' service is experiencing high latency and intermittent failures due to a misconfigured Redis connection",
+      "redis connection refused' in the cart service logs",
+      "Events show 'Failed to connect to Redis server",
+      "redis connection refused",
+      "Failed to connect to Redis server"
+    ],
+    "context": {
+      "namespace": "astronomy-shop",
+      "resource_type": "Deployment",
+      "service": "endpoints"
+    },
+    "outcomes": [
+      "Fault remediated; service restored to healthy state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Validate service targetPort matches containerPort before deploy. Document required traffic flows before applying NetworkPolicy. Use IngressClass with health checks.",
+    "timestamp": 1777462194.4935553
+  },
+  {
+    "id": "kfrd_aoi_00022",
+    "problem": "Kubernetes System fault in namespace 'test-hotel-reservation'. You are requested to identify the service(s) where the root cause of the fault lies. Affected: Pods like geo-84fbc958c7-9t27s, namespace test-hotel-reservation, service geo, nodes kind-worker. Symptoms: Container killed by OOM killer. Preemption by higher priority pod. CrashLoopBackOff.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-hotel-reservation -o wide",
+      "kubectl get events -n test-hotel-reservation --sort-by='.lastTimestamp' --field-selector type!=Normal",
+      "kubectl describe pod geo-84fbc958c7-9t27s -n test-hotel-reservation",
+      "kubectl logs geo-84fbc958c7-9t27s -n test-hotel-reservation --previous --tail=100",
+      "kubectl logs geo-84fbc958c7-9t27s -n test-hotel-reservation --tail=100",
+      "kubectl get service geo -n test-hotel-reservation -o yaml"
+    ],
+    "final_solution": "kubectl set resources deployment geo -n test-hotel-reservation --limits=memory=512Mi --requests=memory=256Mi\nkubectl rollout restart deployment geo -n test-hotel-reservation\nkubectl get pods -n test-hotel-reservation -o wide\nkubectl describe pod geo-84fbc958c7-9t27s -n test-hotel-reservation\nkubectl logs geo-84fbc958c7-9t27s -n test-hotel-reservation --tail=100",
+    "reasoning": "Root cause: A container in the 'geo' deployment was forcibly killed, causing the pod to restart repeatedly and leading to service instability. This results in intermittent failures when retrieving hotel location data.",
+    "fault_category": "System",
+    "symptoms": [
+      "Container killed by OOM killer",
+      "Preemption by higher priority pod",
+      "CrashLoopBackOff",
+      "CrashLoopBackOff' status in pod description"
+    ],
+    "context": {
+      "namespace": "test-hotel-reservation",
+      "resource_type": "Deployment",
+      "service": "instability"
+    },
+    "outcomes": [
+      "Environment variable or resource limit applied to deployment",
+      "Pods restarted and returned to Running state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Configure kubelet log rotation and container log max-size. Monitor node disk, memory, and container runtime health. Automate certificate renewal with cert-manager.",
+    "timestamp": 1777462194.4937818
+  },
+  {
+    "id": "kfrd_aoi_00023",
+    "problem": "Kubernetes System fault in namespace 'test-hotel-reservation'. Detect if any containers have been killed due to OOMKilling or other critical issues. Affected: Pod geo-84fbc958c7-m8fkf, namespace test-hotel-reservation, deployment geo. Symptoms: Killed' in container status, 'Out of memory: Kill process' in logs, 'OOMKilling' in events. in container status,.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-hotel-reservation",
+      "kubectl describe pod geo-84fbc958c7-m8fkf -n test-hotel-reservation",
+      "kubectl logs geo-84fbc958c7-m8fkf -n test-hotel-reservation --previous --tail=50",
+      "kubectl logs geo-84fbc958c7-m8fkf -n test-hotel-reservation --tail=50",
+      "kubectl get events -n test-hotel-reservation --field-selector involvedObject.name=geo-84fbc958c7-m8fkf --sort-by='.lastTimestamp'",
+      "kubectl get events -n test-hotel-reservation --field-selector reason=OOMKilling --sort-by='.lastTimestamp'"
+    ],
+    "final_solution": "kubectl set resources deployment geo -n test-hotel-reservation --limits=memory=2Gi --requests=memory=1Gi\nkubectl rollout restart deployment geo -n test-hotel-reservation\nkubectl get pods -n test-hotel-reservation\nkubectl describe pod geo-84fbc958c7-m8fkf -n test-hotel-reservation\nkubectl logs geo-84fbc958c7-m8fkf -n test-hotel-reservation --tail=50",
+    "reasoning": "Root cause: A container in the geo pod was killed due to Out Of Memory (OOMKilling), causing the pod to restart repeatedly and leading to service instability.",
+    "fault_category": "System",
+    "symptoms": [
+      "Killed' in container status, 'Out of memory: Kill process' in logs, 'OOMKilling' in events",
+      "in container status,"
+    ],
+    "context": {
+      "namespace": "test-hotel-reservation",
+      "resource_type": "Deployment",
+      "pod": "geo-84fbc958c7-m8fkf"
+    },
+    "outcomes": [
+      "Environment variable or resource limit applied to deployment",
+      "Pods restarted and returned to Running state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Configure kubelet log rotation and container log max-size. Monitor node disk, memory, and container runtime health. Automate certificate renewal with cert-manager.",
+    "timestamp": 1777462194.493971
+  },
+  {
+    "id": "kfrd_aoi_00024",
+    "problem": "Kubernetes Image fault in namespace 'astronomy-shop'. list[]: an empty list if no faults were detected. Affected: Pod image-provider-7784cfd55c-slgrf, namespace astronomy-shop, service image-provider. Symptoms: Error pulling image \"registry.example.com/astronomy-shop/image-provider:latest\": unauthorized: authentication required. Events show 'ImagePullBackOff' and 'Failed to pull image. . Events show.",
+    "attempted_solutions": [
+      "kubectl get pods -n astronomy-shop -o wide",
+      "kubectl get services -n astronomy-shop -o wide",
+      "kubectl get events -n astronomy-shop --sort-by='.lastTimestamp' --field-selector type!=Normal",
+      "kubectl describe pod image-provider-7784cfd55c-slgrf -n astronomy-shop",
+      "kubectl get deployment image-provider -n astronomy-shop -o yaml",
+      "kubectl get service image-provider -n astronomy-shop -o yaml"
+    ],
+    "final_solution": "kubectl patch deployment image-provider -n astronomy-shop -p '{\"spec\":{\"template\":{\"spec\":{\"imagePullSecrets\":[{\"name\":\"image-provider-registry-credentials\"}]}}}}'\nkubectl get pods -n astronomy-shop -o wide\nkubectl describe pod image-provider-7784cfd55c-slgrf -n astronomy-shop\nkubectl logs image-provider-7784cfd55c-slgrf -n astronomy-shop",
+    "reasoning": "Root cause: The image-provider service is experiencing slow load times due to a misconfigured image pull policy that forces the pod to pull the image from a private registry without proper authentication. This results in repeated failed pulls and delayed pod startup.",
+    "fault_category": "Image",
+    "symptoms": [
+      "Error pulling image \"registry.example.com/astronomy-shop/image-provider:latest\": unauthorized: authentication required",
+      "Events show 'ImagePullBackOff' and 'Failed to pull image",
+      ". Events show",
+      "Failed to pull image",
+      "registry.example.com/astronomy-shop/image-provider:latest"
+    ],
+    "context": {
+      "namespace": "astronomy-shop",
+      "resource_type": "Service",
+      "pod": "image-provider-7784cfd55c-slgrf"
+    },
+    "outcomes": [
+      "Fault remediated; service restored to healthy state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Pin image tags to immutable digests or explicit semver in all manifests. Never use :latest in production. Build multi-arch images with buildx in CI.",
+    "timestamp": 1777462194.4941795
+  },
+  {
+    "id": "kfrd_aoi_00025",
+    "problem": "Kubernetes Network fault in namespace 'test-social-network'. Identify and resolve a misconfiguration related to target port settings in a service. Affected: Pods like compose-post-service-7864598f74-2qjkl, namespace test-social-network, service compose-post-service, deployment compose-post-service. Symptoms: Error connecting to upstream: connection refused' in the nginx-thrift logs. Events show 'Failed to establish connection. Error connecting to upstream: connection refused.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-social-network -o wide",
+      "kubectl get services,deployments,replicasets -n test-social-network -o wide",
+      "kubectl get events -n test-social-network --sort-by='.lastTimestamp' --field-selector type!=Normal",
+      "kubectl get deployment compose-post-service -n test-social-network -o yaml",
+      "kubectl get service compose-post-service -n test-social-network -o yaml",
+      "kubectl describe pod compose-post-service-7864598f74-2qjkl -n test-social-network | grep -A 20 Events"
+    ],
+    "final_solution": "kubectl patch service compose-post-service -n test-social-network -p '{\"spec\":{\"ports\":[{\"name\":\"thrift\",\"port\":8080,\"targetPort\":8080}]}}'\nkubectl get service compose-post-service -n test-social-network -o yaml\nkubectl get pods -n test-social-network -l app=compose-post-service\nkubectl describe pod compose-post-service-7864598f74-2qjkl -n test-social-network | grep -A 20 Events\nkubectl logs nginx-thrift-7c48f57-jc5dz -n test-social-network --tail=50",
+    "reasoning": "Root cause: The compose-post-service is misconfigured with a targetPort that does not match the containerPort in the deployment, causing communication failures between services. This results in RPC calls failing and services becoming unresponsive.",
+    "fault_category": "Network",
+    "symptoms": [
+      "Error connecting to upstream: connection refused' in the nginx-thrift logs",
+      "Events show 'Failed to establish connection",
+      "Error connecting to upstream: connection refused",
+      "Failed to establish connection"
+    ],
+    "context": {
+      "namespace": "test-social-network",
+      "resource_type": "Deployment",
+      "service": "compose-post-service"
+    },
+    "outcomes": [
+      "Fault remediated; service restored to healthy state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Validate service targetPort matches containerPort before deploy. Document required traffic flows before applying NetworkPolicy. Use IngressClass with health checks.",
+    "timestamp": 1777462194.4944017
+  },
+  {
+    "id": "kfrd_aoi_00026",
+    "problem": "Kubernetes Network fault in namespace 'test-social-network'. Mitigate anomalies caused by a misconfigured target port in the home-timeline-service, which is causing communication failures between services. Affected: Pods like home-timeline-service-7d787c8dfd-m4pjq, namespace test-social-network, service home-timeline-service. Symptoms: The home-timeline-service's Kubernetes Service resource is configured with an incorrect targetPort value (. connection refused. EndpointSlice has no endpoints.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-social-network -o wide",
+      "kubectl get services -n test-social-network -o wide",
+      "kubectl get endpoints home-timeline-service -n test-social-network -o yaml",
+      "kubectl describe service home-timeline-service -n test-social-network",
+      "kubectl get deployment home-timeline-service -n test-social-network -o yaml",
+      "kubectl get pods -n test-social-network -o custom-columns=NAME:.metadata.name,RESTARTS:.status.containerStatuses[0].restartCount,AGE:.metadata.creationTimestamp,READY:.status.conditions[?(@.type=='Ready')].status"
+    ],
+    "final_solution": "kubectl patch service home-timeline-service -n test-social-network --type='json' -p='[{\"op\": \"replace\", \"path\": \"/spec/ports/0/targetPort\", \"value\": 9090}]'\nkubectl get service home-timeline-service -n test-social-network -o yaml\nkubectl get endpoints home-timeline-service -n test-social-network -o yaml\nkubectl get pods -n test-social-network -o wide\nkubectl describe service home-timeline-service -n test-social-network\nkubectl logs home-timeline-service-7d787c8dfd-m4pjq -n test-social-network --tail=50",
+    "reasoning": "Root cause: The home-timeline-service's Kubernetes Service resource is configured with an incorrect targetPort value (8080) that does not match the container's exposed port (9090), causing communication failures between services.",
+    "fault_category": "Network",
+    "symptoms": [
+      "The home-timeline-service's Kubernetes Service resource is configured with an incorrect targetPort value (",
+      "connection refused",
+      "EndpointSlice has no endpoints",
+      "No connection could be made because the target machine actively refused it",
+      "errors in application logs, 'EndpointSlice has no endpoints' in service events, and"
+    ],
+    "context": {
+      "namespace": "test-social-network",
+      "resource_type": "Service",
+      "service": "resource"
+    },
+    "outcomes": [
+      "Fault remediated; service restored to healthy state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Validate service targetPort matches containerPort before deploy. Document required traffic flows before applying NetworkPolicy. Use IngressClass with health checks.",
+    "timestamp": 1777462194.4946332
+  },
+  {
+    "id": "kfrd_aoi_00027",
+    "problem": "Kubernetes Network fault in namespace 'test-social-network'. Your task is to identify and mitigate a misconfigured target port in the text-service that is causing communication failures between services. Affected: Pods like text-service-585f7cbc5f-54v6v, namespace test-social-network, service text-service, deployment text-service. Symptoms: Connection refused. Endpoint slice has no addresses. no such port.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-social-network -o wide",
+      "kubectl get services -n test-social-network -o wide",
+      "kubectl get endpoints text-service -n test-social-network",
+      "kubectl describe service text-service -n test-social-network",
+      "kubectl get deployment text-service -n test-social-network -o yaml",
+      "kubectl get pod text-service-585f7cbc5f-54v6v -n test-social-network -o jsonpath='{.spec.containers[0].ports[0].containerPort}'"
+    ],
+    "final_solution": "kubectl exec -n test-social-network text-service-585f7cbc5f-54v6v -- netstat -tuln | grep 9090\nkubectl patch service text-service -n test-social-network --type='json' -p='[{\"op\": \"replace\", \"path\": \"/spec/ports/0/targetPort\", \"value\": 9090}]'\nkubectl get endpoints text-service -n test-social-network\nkubectl get pods -n test-social-network -l app=text-service\nkubectl describe pod text-service-585f7cbc5f-54v6v -n test-social-network\nkubectl get service text-service -n test-social-network -o wide\nkubectl get pods -n test-social-network -o wide",
+    "reasoning": "Root cause: The text-service's Kubernetes Service resource is misconfigured with a targetPort that does not match the containerPort of the text-service pods, causing RPC communication failures between services.",
+    "fault_category": "Network",
+    "symptoms": [
+      "Connection refused",
+      "Endpoint slice has no addresses",
+      "no such port",
+      "errors in application logs, 'Endpoint slice has no addresses' in service events, and"
+    ],
+    "context": {
+      "namespace": "test-social-network",
+      "resource_type": "Deployment",
+      "service": "resource"
+    },
+    "outcomes": [
+      "Fault remediated; service restored to healthy state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Validate service targetPort matches containerPort before deploy. Document required traffic flows before applying NetworkPolicy. Use IngressClass with health checks.",
+    "timestamp": 1777462194.494855
+  },
+  {
+    "id": "kfrd_aoi_00028",
+    "problem": "Kubernetes Network fault in namespace 'test-social-network'. Your task is to identify and fix a misconfigured target port in the service definition that is causing communication failures between the Thrift proxy and the backend. Affected: Pods like post-storage-service-9bd8bd979-lsmvt, namespace test-social-network, service post-storage-service, and the nginx-thrift proxy service. Symptoms: The post-storage-service's Kubernetes Service resource is configured with an incorrect targetPort value (. Events show 'Endpoints not available' for the post-storage-service. Error connecting to upstream: connection refused.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-social-network",
+      "kubectl get services -n test-social-network",
+      "kubectl describe service post-storage-service -n test-social-network",
+      "kubectl get pod post-storage-service-9bd8bd979-lsmvt -n test-social-network -o yaml",
+      "kubectl logs nginx-thrift-7c48f57-f78bp -n test-social-network",
+      "kubectl get endpoints post-storage-service -n test-social-network"
+    ],
+    "final_solution": "kubectl patch service post-storage-service -n test-social-network --type='json' -p='[{\"op\": \"replace\", \"path\": \"/spec/ports/0/targetPort\", \"value\": 9090}]'\nkubectl get service post-storage-service -n test-social-network -o yaml\nkubectl get endpoints post-storage-service -n test-social-network\nkubectl logs nginx-thrift-7c48f57-f78bp -n test-social-network\nkubectl get pods -n test-social-network\nkubectl describe pod post-storage-service-9bd8bd979-lsmvt -n test-social-network\nkubectl get service post-storage-service -n test-social-network -o jsonpath='{.spec.ports[0].targetPort}'",
+    "reasoning": "Root cause: The post-storage-service's Kubernetes Service resource is configured with an incorrect targetPort value (8080) that does not match the container's listening port (9090), leading to failed Thrift RPC calls between the proxy and the storage service.",
+    "fault_category": "Network",
+    "symptoms": [
+      "The post-storage-service's Kubernetes Service resource is configured with an incorrect targetPort value (",
+      "Events show 'Endpoints not available' for the post-storage-service",
+      "Error connecting to upstream: connection refused",
+      "no suitable backend found",
+      "Endpoints not available"
+    ],
+    "context": {
+      "namespace": "test-social-network",
+      "resource_type": "Service",
+      "service": "resource"
+    },
+    "outcomes": [
+      "Fault remediated; service restored to healthy state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Validate service targetPort matches containerPort before deploy. Document required traffic flows before applying NetworkPolicy. Use IngressClass with health checks.",
+    "timestamp": 1777462194.4950879
+  },
+  {
+    "id": "kfrd_aoi_00029",
+    "problem": "Kubernetes Network fault in namespace 'test-social-network'. Analyze the service's state and telemetry to detect and resolve a misconfiguration in the target port of a service. Affected: Pods like media-service-5f6b5dbff8-fcr7f, namespace test-social-network, service media-service. Symptoms: Endpoint is not available' in the service logs. Events show 'No endpoints available for service. Endpoint is not available.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-social-network -o wide",
+      "kubectl get services -n test-social-network -o wide",
+      "kubectl get deployments -n test-social-network -o wide",
+      "kubectl get events -n test-social-network --sort-by=.lastTimestamp",
+      "kubectl describe service media-service -n test-social-network",
+      "kubectl describe pod media-service-5f6b5dbff8-fcr7f -n test-social-network"
+    ],
+    "final_solution": "kubectl patch service media-service -n test-social-network -p '{\"spec\":{\"ports\":[{\"port\":8080,\"targetPort\":8080}]}}'\nkubectl get endpoints media-service -n test-social-network\nkubectl get pods -n test-social-network -o wide\nkubectl describe service media-service -n test-social-network\nkubectl logs media-service-5f6b5dbff8-fcr7f -n test-social-network --tail=50",
+    "reasoning": "Root cause: The media-service's Kubernetes Service is misconfigured with a targetPort that does not match the containerPort of the media-service pod, causing the service to fail in routing traffic to the pods. This results in the media-service being unreachable.",
+    "fault_category": "Network",
+    "symptoms": [
+      "Endpoint is not available' in the service logs",
+      "Events show 'No endpoints available for service",
+      "Endpoint is not available",
+      "No endpoints available for service"
+    ],
+    "context": {
+      "namespace": "test-social-network",
+      "resource_type": "Service"
+    },
+    "outcomes": [
+      "Fault remediated; service restored to healthy state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Validate service targetPort matches containerPort before deploy. Document required traffic flows before applying NetworkPolicy. Use IngressClass with health checks.",
+    "timestamp": 1777462194.4953146
+  },
+  {
+    "id": "kfrd_aoi_00030",
+    "problem": "Kubernetes Network fault in namespace 'test-social-network'. Analyze the service's state and telemetry to identify and resolve a misconfiguration in the target port of a service. Affected: Pods like post-storage-service-9bd8bd979-p6lwk, compose-post-service-64f6c9b656-rhv7x, namespace test-social-network, service post-storage-service. Symptoms: Thrift transport error: TTransportException: Could not establish connection to host:port. Events show 'Failed to connect to endpoint. Failed to connect to endpoint.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-social-network -o wide",
+      "kubectl get services -n test-social-network -o wide",
+      "kubectl get endpoints post-storage-service -n test-social-network -o yaml",
+      "kubectl describe service post-storage-service -n test-social-network",
+      "kubectl get service post-storage-service -n test-social-network -o yaml",
+      "kubectl logs compose-post-service-64f6c9b656-rhv7x -n test-social-network --tail=50"
+    ],
+    "final_solution": "kubectl patch service post-storage-service -n test-social-network -p '{\"spec\":{\"ports\":[{\"name\":\"thrift\",\"port\":9090,\"targetPort\":9090}]}}'\nkubectl get service post-storage-service -n test-social-network -o yaml\nkubectl get pods -n test-social-network -o wide\nkubectl describe pod compose-post-service-64f6c9b656-rhv7x -n test-social-network\nkubectl logs compose-post-service-64f6c9b656-rhv7x -n test-social-network --tail=50\nkubectl get endpoints post-storage-service -n test-social-network -o yaml",
+    "reasoning": "Root cause: The post-storage-service has a misconfigured target port in its service definition, causing the compose-post-service to fail in establishing Thrift RPC connections. This results in failed post creation and retrieval operations.",
+    "fault_category": "Network",
+    "symptoms": [
+      "Thrift transport error: TTransportException: Could not establish connection to host:port",
+      "Events show 'Failed to connect to endpoint",
+      "Failed to connect to endpoint",
+      "error: TTransportException: Could not establish connection to host:port"
+    ],
+    "context": {
+      "namespace": "test-social-network",
+      "resource_type": "Service",
+      "service": "has"
+    },
+    "outcomes": [
+      "Fault remediated; service restored to healthy state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Validate service targetPort matches containerPort before deploy. Document required traffic flows before applying NetworkPolicy. Use IngressClass with health checks.",
+    "timestamp": 1777462194.4955397
+  },
+  {
+    "id": "kfrd_aoi_00031",
+    "problem": "Kubernetes Network fault in namespace 'test-social-network'. You are requested to identify the service(s) where the root cause of the fault lies. Affected: Pods like compose-post-service-64f6c9b656-4rtnd, namespace test-social-network, service nginx-thrift, service compose-post-service. Symptoms: Error connecting to upstream. Connection refused. Endpoints not available.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-social-network -o wide",
+      "kubectl get services -n test-social-network -o wide",
+      "kubectl get events -n test-social-network --sort-by='.lastTimestamp' --field-selector type!=Normal",
+      "kubectl describe service nginx-thrift -n test-social-network",
+      "kubectl describe pod compose-post-service-64f6c9b656-4rtnd -n test-social-network",
+      "kubectl logs nginx-thrift-7894567890-abcde -n test-social-network"
+    ],
+    "final_solution": "kubectl patch service nginx-thrift -n test-social-network -p '{\"spec\":{\"ports\":[{\"port\":9090,\"targetPort\":9090}]}}'\nkubectl get service nginx-thrift -n test-social-network -o wide\nkubectl get endpoints nginx-thrift -n test-social-network\nkubectl get pods -n test-social-network -o wide\nkubectl describe pod compose-post-service-64f6c9b656-4rtnd -n test-social-network\nkubectl logs compose-post-service-64f6c9b656-4rtnd -n test-social-network",
+    "reasoning": "Root cause: The nginx-thrift service is misconfigured with incorrect targetPort values in its service definition, leading to failed Thrift RPC communications between microservices. This results in intermittent failures when creating or reading posts.",
+    "fault_category": "Network",
+    "symptoms": [
+      "Error connecting to upstream",
+      "Connection refused",
+      "Endpoints not available",
+      "Error connecting to upstream' in nginx logs, 'Connection refused' in compose-post-ser"
+    ],
+    "context": {
+      "namespace": "test-social-network",
+      "resource_type": "Service",
+      "service": "definition"
+    },
+    "outcomes": [
+      "Fault remediated; service restored to healthy state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Validate service targetPort matches containerPort before deploy. Document required traffic flows before applying NetworkPolicy. Use IngressClass with health checks.",
+    "timestamp": 1777462194.4958825
+  },
+  {
+    "id": "kfrd_aoi_00032",
+    "problem": "Kubernetes Network fault in namespace 'test-social-network'. You are requested to identify the service(s) where the root cause of the fault lies. Affected: Pods like post-storage-service-9bd8bd979-chqt6, namespace test-social-network, service post-storage-service, compose-post-service. Symptoms: Error connecting to Thrift service on port 9090: connection refused.. Endpoints not ready.. Connection refused.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-social-network -o wide",
+      "kubectl get services -n test-social-network -o wide",
+      "kubectl get events -n test-social-network --sort-by='.lastTimestamp' --field-selector type!=Normal | tail -50",
+      "kubectl describe service post-storage-service -n test-social-network",
+      "kubectl get service post-storage-service -n test-social-network -o yaml",
+      "kubectl get deployment post-storage-service -n test-social-network -o yaml"
+    ],
+    "final_solution": "kubectl exec post-storage-service-9bd8bd979-chqt6 -n test-social-network -- netstat -tlnp | grep LISTEN\nkubectl get service post-storage-service -n test-social-network -o jsonpath='{.spec.ports[0].port}'\nkubectl get service post-storage-service -n test-social-network -o jsonpath='{.spec.ports[0].targetPort}'\nkubectl get deployment post-storage-service -n test-social-network -o jsonpath='{.spec.template.spec.containers[0].ports[0].containerPort}'\nkubectl patch service post-storage-service -n test-social-network -p '{\"spec\":{\"ports\":[{\"port\":9090,\"targetPort\":9090}]}}'\nkubectl get service post-storage-service -n test-social-network -o yaml\nkubectl get endpoints post-storage-service -n test-social-network\nkubectl get pods -n test-social-network -o wide",
+    "reasoning": "Root cause: The post-storage-service has a misconfigured targetPort in its service definition, which does not match the containerPort in the deployment, leading to failed Thrift RPC connections between compose-post-service and post-storage-service.",
+    "fault_category": "Network",
+    "symptoms": [
+      "Error connecting to Thrift service on port 9090: connection refused.",
+      "Endpoints not ready.",
+      "Connection refused",
+      "Error connecting to Thrift service on port 9090: connection refused"
+    ],
+    "context": {
+      "namespace": "test-social-network",
+      "resource_type": "Deployment",
+      "service": "has"
+    },
+    "outcomes": [
+      "Fault remediated; service restored to healthy state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Validate service targetPort matches containerPort before deploy. Document required traffic flows before applying NetworkPolicy. Use IngressClass with health checks.",
+    "timestamp": 1777462194.496126
+  },
+  {
+    "id": "kfrd_aoi_00033",
+    "problem": "Kubernetes Network fault in namespace 'test-social-network'. Detect misconfigured target ports in services that could prevent proper communication between microservices. Affected: Pods like user-service-6d5985bd55-nn6mw, namespace test-social-network, service user-service. Symptoms: Endpoints for service user-service are empty.' Logs from the user-service pod show no incoming connections. Events show 'Endpoints not available. Endpoints for service user-service are empty..",
+    "attempted_solutions": [
+      "kubectl get pods -n test-social-network -o wide",
+      "kubectl get services -n test-social-network -o wide",
+      "kubectl get endpoints user-service -n test-social-network",
+      "kubectl describe service user-service -n test-social-network",
+      "kubectl get deployment user-service -n test-social-network -o yaml",
+      "kubectl get service user-service -n test-social-network -o yaml"
+    ],
+    "final_solution": "kubectl patch service user-service -n test-social-network -p '{\"spec\":{\"ports\":[{\"name\":\"http\",\"port\":8080,\"targetPort\":8080}]}}'\nkubectl get endpoints user-service -n test-social-network\nkubectl get pods -n test-social-network -l app=user-service\nkubectl describe pod user-service-6d5985bd55-nn6mw -n test-social-network",
+    "reasoning": "Root cause: The user-service service is misconfigured with a targetPort that does not match the containerPort in the deployment, causing the service to fail to route traffic to the pods. This results in the user-service being unreachable by other services.",
+    "fault_category": "Network",
+    "symptoms": [
+      "Endpoints for service user-service are empty.' Logs from the user-service pod show no incoming connections",
+      "Events show 'Endpoints not available",
+      "Endpoints for service user-service are empty.",
+      "Endpoints not available."
+    ],
+    "context": {
+      "namespace": "test-social-network",
+      "resource_type": "Deployment"
+    },
+    "outcomes": [
+      "Fault remediated; service restored to healthy state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Validate service targetPort matches containerPort before deploy. Document required traffic flows before applying NetworkPolicy. Use IngressClass with health checks.",
+    "timestamp": 1777462194.496353
+  },
+  {
+    "id": "kfrd_aoi_00034",
+    "problem": "Kubernetes Network fault in namespace 'test-social-network'. Detect misconfigured target ports in services that may cause communication failures between microservices. Affected: Pod text-service-585f7cbc5f-5hqb2, namespace test-social-network, service text-service, deployment text-service. Symptoms: Error connecting to service text-service: connection refused' in user-service logs. Events show 'Endpoints not available' for text-service. Error connecting to service text-service: connection refused.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-social-network -o wide",
+      "kubectl get services -n test-social-network -o wide",
+      "kubectl get deployments -n test-social-network -o wide",
+      "kubectl get events -n test-social-network --sort-by='.lastTimestamp' --field-selector type!=Normal",
+      "kubectl describe service text-service -n test-social-network",
+      "kubectl describe pod text-service-585f7cbc5f-5hqb2 -n test-social-network"
+    ],
+    "final_solution": "kubectl patch service text-service -n test-social-network -p '{\"spec\":{\"ports\":[{\"name\":\"thrift\",\"port\":9090,\"targetPort\":9090}]}}'\nkubectl rollout restart deployment/text-service -n test-social-network\nkubectl get pods -n test-social-network -o wide\nkubectl describe service text-service -n test-social-network\nkubectl logs text-service-585f7cbc5f-5hqb2 -n test-social-network",
+    "reasoning": "Root cause: The text-service has a misconfigured targetPort in its service definition that does not match the containerPort defined in its deployment, causing RPC communication failures between microservices.",
+    "fault_category": "Network",
+    "symptoms": [
+      "Error connecting to service text-service: connection refused' in user-service logs",
+      "Events show 'Endpoints not available' for text-service",
+      "Error connecting to service text-service: connection refused",
+      "Endpoints not available"
+    ],
+    "context": {
+      "namespace": "test-social-network",
+      "resource_type": "Deployment",
+      "pod": "text-service-585f7cbc5f-5hqb2"
+    },
+    "outcomes": [
+      "Pods restarted and returned to Running state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Validate service targetPort matches containerPort before deploy. Document required traffic flows before applying NetworkPolicy. Use IngressClass with health checks.",
+    "timestamp": 1777462194.496549
+  },
+  {
+    "id": "kfrd_aoi_00035",
+    "problem": "Kubernetes Network fault in namespace 'test-social-network'. Detect anomalies related to misconfigured target ports in services. Affected: Pods like nginx-thrift-7c48f57-rwvxv, compose-post-service-64f6c9b656-k2n8j, namespace test-social-network, services nginx-thrift and compose-post-service. Symptoms: Error connecting to upstream' in nginx logs, 'Connection refused' in compose-post-service logs. Events show 'Endpoints not available' for nginx-thrift. Error connecting to upstream.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-social-network -o wide",
+      "kubectl get services -n test-social-network -o wide",
+      "kubectl get deployments -n test-social-network -o wide",
+      "kubectl describe service nginx-thrift -n test-social-network",
+      "kubectl describe service compose-post-service -n test-social-network",
+      "kubectl get service nginx-thrift -n test-social-network -o yaml"
+    ],
+    "final_solution": "kubectl patch service nginx-thrift -n test-social-network -p '{\"spec\":{\"ports\":[{\"name\":\"thrift\",\"port\":8080,\"targetPort\":8080}]}}'\nkubectl get service nginx-thrift -n test-social-network -o yaml\nkubectl get pods -n test-social-network -o wide\nkubectl logs nginx-thrift-7c48f57-rwvxv -n test-social-network --tail=20\nkubectl logs compose-post-service-64f6c9b656-k2n8j -n test-social-network --tail=20",
+    "reasoning": "Root cause: The nginx-thrift service is misconfigured with a targetPort that does not match the containerPort of the compose-post-service, causing communication failures between services. This results in RPC calls failing and posts not being composed.",
+    "fault_category": "Network",
+    "symptoms": [
+      "Error connecting to upstream' in nginx logs, 'Connection refused' in compose-post-service logs",
+      "Events show 'Endpoints not available' for nginx-thrift",
+      "Error connecting to upstream",
+      "Connection refused",
+      "Endpoints not available"
+    ],
+    "context": {
+      "namespace": "test-social-network",
+      "resource_type": "Service",
+      "service": "logs"
+    },
+    "outcomes": [
+      "Fault remediated; service restored to healthy state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Validate service targetPort matches containerPort before deploy. Document required traffic flows before applying NetworkPolicy. Use IngressClass with health checks.",
+    "timestamp": 1777462194.496782
+  },
+  {
+    "id": "kfrd_aoi_00036",
+    "problem": "Kubernetes System fault in namespace 'astronomy-shop'. You are requested to identify the service(s) where the root cause of the fault lies. Affected: Pods like checkout-74b5957d48-5pvss, service checkout, Kafka topic orders-topic, namespace astronomy-shop. Symptoms: Events show 'Failed to connect to Kafka broker. . Events show. Error producing message to Kafka topic orders-topic: org.",
+    "attempted_solutions": [
+      "kubectl get pods -n astronomy-shop -o wide",
+      "kubectl get services -n astronomy-shop -o wide",
+      "kubectl get deployments -n astronomy-shop -o wide",
+      "kubectl describe pod checkout-74b5957d48-5pvss -n astronomy-shop",
+      "kubectl get events -n astronomy-shop --sort-by='.lastTimestamp' --field-selector involvedObject.kind=Pod",
+      "kubectl logs checkout-74b5957d48-5pvss -n astronomy-shop --tail=100"
+    ],
+    "final_solution": "kubectl set env deployment checkout KAFKA_BOOTSTRAP_SERVERS=kafka.kafka-headless.astronomy-shop.svc.cluster.local:9092 -n astronomy-shop\nkubectl rollout restart deployment checkout -n astronomy-shop\nkubectl get pods -n astronomy-shop -l app.kubernetes.io/name=checkout\nkubectl describe pod checkout-74b5957d48-5pvss -n astronomy-shop\nkubectl logs checkout-74b5957d48-5pvss -n astronomy-shop --tail=100",
+    "reasoning": "Root cause: The Kafka queue is experiencing message loss due to incorrect configuration in the checkout service, which is not properly producing messages to the Kafka topic. This results in order confirmation emails not being sent and order processing delays.",
+    "fault_category": "System",
+    "symptoms": [
+      "Events show 'Failed to connect to Kafka broker",
+      ". Events show",
+      "Error producing message to Kafka topic orders-topic: org",
+      "Failed to connect to Kafka broker"
+    ],
+    "context": {
+      "namespace": "astronomy-shop",
+      "resource_type": "Service",
+      "service": "checkout"
+    },
+    "outcomes": [
+      "Environment variable or resource limit applied to deployment",
+      "Pods restarted and returned to Running state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Configure kubelet log rotation and container log max-size. Monitor node disk, memory, and container runtime health. Automate certificate renewal with cert-manager.",
+    "timestamp": 1777462194.497001
+  },
+  {
+    "id": "kfrd_aoi_00037",
+    "problem": "Kubernetes System fault in namespace 'astronomy-shop'. Detect anomalies related to Kafka queue problems. Affected: Pods like kafka-65cbdb774c-g2tnc, namespace astronomy-shop, service kafka, consumer groups related to order processing. Symptoms: Events show 'ConsumerNotActive' and 'MessageBacklog. Consumer offset is behind latest offset by X messages. Failed to fetch messages from topic order-queue.",
+    "attempted_solutions": [
+      "kubectl get pods -n astronomy-shop -o wide",
+      "kubectl get services -n astronomy-shop -o wide",
+      "kubectl get events -n astronomy-shop --sort-by='.lastTimestamp' --field-selector type!=Normal | tail -50",
+      "kubectl describe pod kafka-65cbdb774c-g2tnc -n astronomy-shop",
+      "kubectl logs kafka-65cbdb774c-g2tnc -n astronomy-shop --tail=100",
+      "kubectl get consumer-group -n astronomy-shop --all-namespaces"
+    ],
+    "final_solution": "kubectl exec -n astronomy-shop kafka-65cbdb774c-g2tnc -- bin/kafka-consumer-groups.sh --bootstrap-server kafka:9092 --describe --group order-processor\nkubectl exec -n astronomy-shop kafka-65cbdb774c-g2tnc -- bin/kafka-topics.sh --bootstrap-server kafka:9092 --describe --topic order-queue\nkubectl patch consumer-group order-processor -n astronomy-shop -p '{\"spec\":{\"offsets\":{\"type\":\"latest\"}}}'\nkubectl exec -n astronomy-shop kafka-65cbdb774c-g2tnc -- bin/kafka-consumer-groups.sh --bootstrap-server kafka:9092 --reset-offsets --to-latest --group order-processor --topic order-queue --execute\nkubectl get consumer-group order-processor -n astronomy-shop -o yaml\nkubectl exec -n astronomy-shop kafka-65cbdb774c-g2tnc -- bin/kafka-consumer-groups.sh --bootstrap-server kafka:9092 --describe --group order-processor\nkubectl logs kafka-65cbdb774c-g2tnc -n astronomy-shop --tail=100\nkubectl get pods -n astronomy-shop -o wide",
+    "reasoning": "Root cause: The Kafka broker pod is not processing messages due to a misconfigured consumer group offset, leading to message backlog and delayed order processing. This results in users experiencing long delays in order confirmation and payment processing.",
+    "fault_category": "System",
+    "symptoms": [
+      "Events show 'ConsumerNotActive' and 'MessageBacklog",
+      "Consumer offset is behind latest offset by X messages",
+      "Failed to fetch messages from topic order-queue",
+      "Consumer is not committing offsets",
+      "ConsumerNotActive"
+    ],
+    "context": {
+      "namespace": "astronomy-shop",
+      "resource_type": "Service",
+      "service": "kafka"
+    },
+    "outcomes": [
+      "Fault remediated; service restored to healthy state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Configure kubelet log rotation and container log max-size. Monitor node disk, memory, and container runtime health. Automate certificate renewal with cert-manager.",
+    "timestamp": 1777462194.4972603
+  },
+  {
+    "id": "kfrd_aoi_00038",
+    "problem": "Kubernetes System fault in namespace 'astronomy-shop'. Detect anomalies related to Kafka queue problems. Affected: Pods like kafka-65cbdb774c-g2tnc, namespace astronomy-shop, service kafka, topic order-events. Symptoms: Events show 'Failed to produce message. Logs from the payment service show. . Events show.",
+    "attempted_solutions": [
+      "kubectl get pods -n astronomy-shop -o wide",
+      "kubectl get services -n astronomy-shop -o wide",
+      "kubectl get topics -n astronomy-shop -o yaml",
+      "kubectl describe service kafka -n astronomy-shop",
+      "kubectl get pods -n astronomy-shop -o json | jq -r '.items[] | {name: .metadata.name, phase: .status.phase, containerStatuses: .status.containerStatuses}'",
+      "kubectl logs kafka-65cbdb774c-g2tnc -n astronomy-shop --tail=100"
+    ],
+    "final_solution": "kubectl exec -n astronomy-shop kafka-65cbdb774c-g2tnc -- bin/kafka-topics.sh --describe --topic order-events --bootstrap-server kafka-65cbdb774c-g2tnc:9092\nkubectl exec -n astronomy-shop kafka-65cbdb774c-g2tnc -- bin/kafka-topics.sh --alter --topic order-events --partitions 10 --bootstrap-server kafka-65cbdb774c-g2tnc:9092\nkubectl get topic order-events -n astronomy-shop -o yaml\nkubectl exec -n astronomy-shop kafka-65cbdb774c-g2tnc -- bin/kafka-topics.sh --describe --topic order-events --bootstrap-server kafka-65cbdb774c-g2tnc:9092\nkubectl logs payment-7894567890-abcde -n astronomy-shop --tail=100\nkubectl get pods -n astronomy-shop -o wide\nkubectl describe pod payment-7894567890-abcde -n astronomy-shop",
+    "reasoning": "Root cause: The Kafka topic 'order-events' has reached its maximum partition count, leading to message retention issues and delayed processing. This results in order confirmation emails not being sent and payment processing delays.",
+    "fault_category": "System",
+    "symptoms": [
+      "Events show 'Failed to produce message",
+      "Logs from the payment service show",
+      ". Events show",
+      "Error: Cannot allocate new partition for topic order-events as it has reached the max",
+      "Failed to send order event to Kafka topic order-events"
+    ],
+    "context": {
+      "namespace": "astronomy-shop",
+      "resource_type": "Service",
+      "service": "kafka"
+    },
+    "outcomes": [
+      "Fault remediated; service restored to healthy state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Configure kubelet log rotation and container log max-size. Monitor node disk, memory, and container runtime health. Automate certificate renewal with cert-manager.",
+    "timestamp": 1777462194.4975278
+  },
+  {
+    "id": "kfrd_aoi_00039",
+    "problem": "Kubernetes System fault in namespace 'astronomy-shop'. Identify the service(s) where the root cause of the fault lies, specifically the load generator flooding the homepage, causing instability in the frontend-proxy service. Affected: Pods like load-generator-78d94dbdd8-xnx4c, frontend-proxy-78766dd9cf-qzq4x, namespace astronomy-shop, service frontend-proxy. Symptoms: Events show increased traffic and resource exhaustion. 503 Service Unavailable. Too many open files.",
+    "attempted_solutions": [
+      "kubectl get pods -n astronomy-shop -o wide",
+      "kubectl get services -n astronomy-shop -o wide",
+      "kubectl get events -n astronomy-shop --sort-by='.lastTimestamp' --field-selector type!=Normal",
+      "kubectl describe pod load-generator-78d94dbdd8-xnx4c -n astronomy-shop",
+      "kubectl logs load-generator-78d94dbdd8-xnx4c -n astronomy-shop --tail=100",
+      "kubectl logs frontend-proxy-78766dd9cf-qzq4x -n astronomy-shop --tail=100"
+    ],
+    "final_solution": "kubectl exec load-generator-78d94dbdd8-xnx4c -n astronomy-shop -- cat /home/locust/locustfile.py\nkubectl exec prometheus-d88d4b57-zt6cg -n astronomy-shop -- wget -qO- 'http://localhost:9090/api/v1/query?query=rate(http_server_requests_total{service_name=~\"frontend.*\"}[1m])' | head -200\nkubectl exec prometheus-d88d4b57-zt6cg -n astronomy-shop -- wget -qO- 'http://localhost:9090/api/v1/query?query=sum(rate(http_server_requests_total{service_name=~\"frontend.*\"}[5m])) by (service_name)' && echo '---TOTAL-REQUESTS---' && kubectl exec prometheus-d88d4b57-zt6cg -n astronomy-shop -- wget -qO- 'http://localhost:9090/api/v1/query?query=sum(increase(http_server_requests_total{service_name=~\"frontend.*\"}[5m])) by (service_name)'\nkubectl patch deployment load-generator -n astronomy-shop -p '{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"load-generator\",\"env\":[{\"name\":\"LOCUST_SPAWN_RATE\",\"value\":\"10\"},{\"name\":\"LOCUST_USERS\",\"value\":\"100\"}]}}]}}}'\nkubectl get pods -n astronomy-shop -o wide\nkubectl logs frontend-proxy-78766dd9cf-qzq4x -n astronomy-shop --tail=100\nkubectl exec prometheus-d88d4b57-zt6cg -n astronomy-shop -- wget -qO- 'http://localhost:9090/api/v1/query?query=rate(http_server_requests_total{service_name=~\"frontend.*\"}[1m])' | head -200",
+    "reasoning": "Root cause: The load-generator deployment is configured to flood the homepage with excessive requests, overwhelming the frontend-proxy service and causing it to become unresponsive. This results in high latency and error rates for users.",
+    "fault_category": "System",
+    "symptoms": [
+      "Events show increased traffic and resource exhaustion",
+      "503 Service Unavailable",
+      "Too many open files",
+      "errors in frontend-proxy logs, high request rates in Prometheus metrics, and 'Too man",
+      "errors in load-generator logs"
+    ],
+    "context": {
+      "namespace": "astronomy-shop",
+      "resource_type": "Deployment",
+      "service": "and"
+    },
+    "outcomes": [
+      "Fault remediated; service restored to healthy state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Configure kubelet log rotation and container log max-size. Monitor node disk, memory, and container runtime health. Automate certificate renewal with cert-manager.",
+    "timestamp": 1777462194.497869
+  },
+  {
+    "id": "kfrd_aoi_00040",
+    "problem": "Kubernetes System fault in namespace 'astronomy-shop'. Detect anomalies caused by a load generator flooding the homepage, leading to increased latency and potential service degradation. Affected: Pods like frontend-7df8568f78-2jqhk, namespace astronomy-shop, service frontend, deployment load-generator. Symptoms: Error: timeout exceeded' in frontend logs, 'High CPU usage' in metrics, 'Too many open files' in load-generator logs. Events show 'Pods are in CrashLoopBackOff due to high resource usage. Error: timeout exceeded.",
+    "attempted_solutions": [
+      "kubectl get pods -n astronomy-shop -o wide --show-labels",
+      "kubectl get services,deployments,statefulsets -n astronomy-shop -o wide",
+      "kubectl get events -n astronomy-shop --sort-by='.lastTimestamp' --field-selector type!=Normal | tail -50",
+      "kubectl get deployment frontend -n astronomy-shop -o yaml",
+      "kubectl describe pod -n astronomy-shop -l opentelemetry.io/name=frontend",
+      "kubectl logs -n astronomy-shop deployment/frontend --tail=100 | grep -E 'Error|timeout|latency' || kubectl logs -n astronomy-shop deployment/frontend --tail=100"
+    ],
+    "final_solution": "kubectl exec -n astronomy-shop deployment/prometheus -- wget -qO- 'http://localhost:9090/api/v1/query?query=rate(http_server_duration_count{service_name=\"frontend\"}[5m])' 2>/dev/null\nkubectl exec -n astronomy-shop deployment/prometheus -- wget -qO- 'http://localhost:9090/api/v1/query?query=rate(http_server_duration_count{service_name=\"frontend\",http_status_code=~\"5..\"}[30m])' 2>/dev/null\nkubectl exec -n astronomy-shop deployment/prometheus -- wget -qO- 'http://localhost:9090/api/v1/query?query=rate(container_cpu_usage_seconds_total{namespace=\"astronomy-shop\",pod=~\"frontend.*\"}[30m])' 2>/dev/null\nkubectl get deployment load-generator -n astronomy-shop -o yaml\nkubectl logs -n astronomy-shop deployment/load-generator --tail=100 | grep -E '(RPS|requests|users|spawning|hatching|GET|POST|rate)' || kubectl logs -n astronomy-shop deployment/load-generator --tail=100\nkubectl describe pod -n astronomy-shop -l opentelemetry.io/name=load-generator\nkubectl set env deployment/load-generator LOAD_RATE=100 -n astronomy-shop\nkubectl rollout restart deployment/load-generator -n astronomy-shop\nkubectl get pods -n astronomy-shop -l opentelemetry.io/name=load-generator\nkubectl get pods -n astronomy-shop -l opentelemetry.io/name=frontend\nkubectl logs -n astronomy-shop deployment/frontend --tail=100 | grep -E 'Error|timeout|latency' || kubectl logs -n astronomy-shop deployment/frontend --tail=100\nkubectl exec -n astronomy-shop deployment/prometheus -- wget -qO- 'http://localhost:9090/api/v1/query?query=rate(http_server_duration_count{service_name=\"frontend\"}[5m])' 2>/dev/null\nkubectl exec -n astronomy-shop deployment/prometheus -- wget -qO- 'http://localhost:9090/api/v1/query?query=rate(http_server_duration_count{service_name=\"frontend\",http_status_code=~\"5..\"}[30m])' 2>/dev/null\nkubectl exec -n astronomy-shop deployment/prometheus -- wget -qO- 'http://localhost:9090/api/v1/query?query=rate(container_cpu_usage_seconds_total{namespace=\"astronomy-shop\",pod=~\"frontend.*\"}[30m])' 2>/dev/null",
+    "reasoning": "Root cause: The load-generator deployment is configured to send an excessive number of requests to the frontend service, causing a surge in traffic and increasing latency for all users. This results in high CPU and memory utilization on the frontend pods, leading to request timeouts and degraded user experience.",
+    "fault_category": "System",
+    "symptoms": [
+      "Error: timeout exceeded' in frontend logs, 'High CPU usage' in metrics, 'Too many open files' in load-generator logs",
+      "Events show 'Pods are in CrashLoopBackOff due to high resource usage",
+      "Error: timeout exceeded",
+      "High CPU usage",
+      "Too many open files"
+    ],
+    "context": {
+      "namespace": "astronomy-shop",
+      "resource_type": "Deployment",
+      "service": "frontend"
+    },
+    "outcomes": [
+      "Environment variable or resource limit applied to deployment",
+      "Pods restarted and returned to Running state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Configure kubelet log rotation and container log max-size. Monitor node disk, memory, and container runtime health. Automate certificate renewal with cert-manager.",
+    "timestamp": 1777462194.4982603
+  },
+  {
+    "id": "kfrd_aoi_00041",
+    "problem": "Kubernetes Configuration fault in namespace 'test-hotel-reservation'. Your task is to identify and mitigate misconfigurations in the geo deployment that are causing it to fail. Affected: Pods like geo-c47ff745-ztdkt, namespace test-hotel-reservation, service geo, and MongoDB service mongodb-geo. Symptoms: dial tcp: lookup mongodb-geo on 10.96.0.10:53: no such host' in the logs of geo-c47ff745-ztdkt. Events show 'CrashLoopBackOff' for the pod. dial tcp: lookup mongodb-geo on 10.96.0.10:53: no such host.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-hotel-reservation --show-labels",
+      "kubectl get services -n test-hotel-reservation -o wide",
+      "kubectl get deployments -n test-hotel-reservation -o wide",
+      "kubectl describe pod geo-c47ff745-ztdkt -n test-hotel-reservation",
+      "kubectl logs geo-c47ff745-ztdkt -n test-hotel-reservation --tail=50",
+      "kubectl get deployment geo -n test-hotel-reservation -o yaml"
+    ],
+    "final_solution": "kubectl set env deployment/geo MONGO_URI=mongodb://mongodb-geo:27017/geo -n test-hotel-reservation\nkubectl rollout restart deployment/geo -n test-hotel-reservation\nkubectl get pods -n test-hotel-reservation -l io.kompose.service=geo\nkubectl describe pod -n test-hotel-reservation -l io.kompose.service=geo\nkubectl logs -n test-hotel-reservation -l io.kompose.service=geo --tail=50",
+    "reasoning": "Root cause: The geo deployment is misconfigured with an incorrect MongoDB connection string pointing to a non-existent service (mongodb-geo), causing the pods to crash-loop. This results in the geo service being unavailable and disrupting hotel location data retrieval.",
+    "fault_category": "Configuration",
+    "symptoms": [
+      "dial tcp: lookup mongodb-geo on 10.96.0.10:53: no such host' in the logs of geo-c47ff745-ztdkt",
+      "Events show 'CrashLoopBackOff' for the pod",
+      "dial tcp: lookup mongodb-geo on 10.96.0.10:53: no such host",
+      "CrashLoopBackOff",
+      "CrashLoopBackOff' for the pod"
+    ],
+    "context": {
+      "namespace": "test-hotel-reservation",
+      "resource_type": "Deployment"
+    },
+    "outcomes": [
+      "Environment variable or resource limit applied to deployment",
+      "Pods restarted and returned to Running state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Use Helm sync waves or init containers to ensure ConfigMaps/Secrets exist before Deployments. Validate RBAC requirements at design time with kubectl auth can-i dry-run checks in CI.",
+    "timestamp": 1777462194.49854
+  },
+  {
+    "id": "kfrd_aoi_00042",
+    "problem": "Kubernetes Configuration fault in namespace 'test-hotel-reservation'. Identify and resolve a misconfiguration in the geo service deployment that is preventing it from connecting to the MongoDB database. Affected: Pods like geo-c47ff745-xt44q, namespace test-hotel-reservation, service geo, MongoDB service mongodb-geo. Symptoms: Error connecting to MongoDB: no such host', 'MongoDB connection timeout', 'Failed to establish connection to MongoDB. Events show 'CrashLoopBackOff' for the geo pods. Error connecting to MongoDB: no such host.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-hotel-reservation",
+      "kubectl describe pod geo-c47ff745-xt44q -n test-hotel-reservation",
+      "kubectl logs geo-c47ff745-xt44q -n test-hotel-reservation",
+      "kubectl get service mongodb-geo -n test-hotel-reservation",
+      "kubectl get deployment geo -n test-hotel-reservation -o yaml",
+      "kubectl get deployment geo -n test-hotel-reservation -o jsonpath='{.spec.template.spec.containers[0].env}' | jq ."
+    ],
+    "final_solution": "kubectl patch deployment geo -n test-hotel-reservation -p '{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"geo\",\"env\":[{\"name\":\"MONGO_URI\",\"value\":\"mongodb://mongodb-geo:27017\"}]}]}}}}'\nkubectl rollout restart deployment/geo -n test-hotel-reservation\nkubectl get pods -n test-hotel-reservation\nkubectl describe pod geo-c47ff745-xt44q -n test-hotel-reservation\nkubectl logs geo-c47ff745-xt44q -n test-hotel-reservation",
+    "reasoning": "Root cause: The geo service deployment is misconfigured with an incorrect MongoDB connection string in its environment variables, leading to connection failures and service unavailability.",
+    "fault_category": "Configuration",
+    "symptoms": [
+      "Error connecting to MongoDB: no such host', 'MongoDB connection timeout', 'Failed to establish connection to MongoDB",
+      "Events show 'CrashLoopBackOff' for the geo pods",
+      "Error connecting to MongoDB: no such host",
+      "MongoDB connection timeout",
+      "Failed to establish connection to MongoDB"
+    ],
+    "context": {
+      "namespace": "test-hotel-reservation",
+      "resource_type": "Deployment"
+    },
+    "outcomes": [
+      "Pods restarted and returned to Running state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Use Helm sync waves or init containers to ensure ConfigMaps/Secrets exist before Deployments. Validate RBAC requirements at design time with kubectl auth can-i dry-run checks in CI.",
+    "timestamp": 1777462194.4987473
+  },
+  {
+    "id": "kfrd_aoi_00043",
+    "problem": "Kubernetes Configuration fault in namespace 'test-hotel-reservation'. You are requested to identify the service(s) where the root cause of the fault lies. Affected: Pods like geo-c47ff745-jbdfk, namespace test-hotel-reservation, service mongodb-geo. Symptoms: Error connecting to MongoDB: no such host', 'mongodb-geo not found. Events show 'CrashLoopBackOff' for the geo pod. Error connecting to MongoDB: no such host.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-hotel-reservation -o wide",
+      "kubectl describe pod geo-c47ff745-jbdfk -n test-hotel-reservation",
+      "kubectl logs geo-c47ff745-jbdfk -n test-hotel-reservation --tail=50",
+      "kubectl get deployment geo -n test-hotel-reservation -o yaml",
+      "kubectl get service mongodb-geo -n test-hotel-reservation -o yaml",
+      "kubectl get configmaps,secrets -n test-hotel-reservation"
+    ],
+    "final_solution": "kubectl rollout status deployment/geo -n test-hotel-reservation\nkubectl get pods -n test-hotel-reservation -o wide\nkubectl describe pod geo-c47ff745-jbdfk -n test-hotel-reservation\nkubectl logs geo-c47ff745-jbdfk -n test-hotel-reservation --tail=50\nkubectl get service mongodb-geo -n test-hotel-reservation -o yaml",
+    "reasoning": "Root cause: The geo-service deployment has a misconfigured environment variable pointing to a non-existent MongoDB instance, causing it to fail during startup. This results in the geo-service being unavailable and affecting hotel location data retrieval.",
+    "fault_category": "Configuration",
+    "symptoms": [
+      "Error connecting to MongoDB: no such host', 'mongodb-geo not found",
+      "Events show 'CrashLoopBackOff' for the geo pod",
+      "Error connecting to MongoDB: no such host",
+      "mongodb-geo not found",
+      "CrashLoopBackOff"
+    ],
+    "context": {
+      "namespace": "test-hotel-reservation",
+      "resource_type": "Deployment"
+    },
+    "outcomes": [
+      "Fault remediated; service restored to healthy state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Use Helm sync waves or init containers to ensure ConfigMaps/Secrets exist before Deployments. Validate RBAC requirements at design time with kubectl auth can-i dry-run checks in CI.",
+    "timestamp": 1777462194.498949
+  },
+  {
+    "id": "kfrd_aoi_00044",
+    "problem": "Kubernetes Configuration fault in namespace 'test-hotel-reservation'. Detect anomalies in the service. Affected: Pods like geo-c47ff745-rgd5z, namespace test-hotel-reservation, service mongodb-geo, deployment geo. Symptoms: pymongo.errors.ConnectionFailure: Could not connect to MongoDB: [Errno 111] Connection refused' in application logs. Events show 'CrashLoopBackOff' for the geo pod. pymongo.errors.ConnectionFailure: Could not connect to MongoDB: [Errno 111] Connection refused.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-hotel-reservation --show-labels -o wide",
+      "kubectl describe pod geo-c47ff745-rgd5z -n test-hotel-reservation",
+      "kubectl logs geo-c47ff745-rgd5z -n test-hotel-reservation --tail=50",
+      "kubectl get service mongodb-geo -n test-hotel-reservation -o yaml",
+      "kubectl get deployment geo -n test-hotel-reservation -o yaml",
+      "kubectl get deployment mongodb-geo -n test-hotel-reservation -o yaml"
+    ],
+    "final_solution": "kubectl exec geo-c47ff745-rgd5z -n test-hotel-reservation -- env | grep -i mongo\nkubectl get configmap -n test-hotel-reservation -o name\nkubectl get configmap -n test-hotel-reservation | grep -i geo\nkubectl get configmap failure-admin-geo -n test-hotel-reservation -o yaml\nkubectl describe configmap failure-admin-geo -n test-hotel-reservation\nkubectl get configmap failure-admin-geo -n test-hotel-reservation -o jsonpath='{.data}' | jq .\nkubectl exec geo-c47ff745-rgd5z -n test-hotel-reservation -- printenv | grep -E '(MONGO|DB|DATABASE)' || echo 'No MongoDB environment variables found'\nkubectl get pod geo-c47ff745-rgd5z -n test-hotel-reservation -o jsonpath='{.spec.volumes[*]}' | jq .\nkubectl get configmap mongo-geo-script -n test-hotel-reservation -o yaml\nkubectl logs mongodb-geo-5ff578bcb8-2zn2s -n test-hotel-reservation --tail=50\nkubectl describe pod mongodb-geo-5ff578bcb8-2zn2s -n test-hotel-reservation\nkubectl exec mongodb-geo-5ff578bcb8-2zn2s -n test-hotel-reservation -- ls -la /scripts\nkubectl get deployment profile -n test-hotel-reservation -o yaml\nkubectl get deployment rate -n test-hotel-reservation -o yaml\nkubectl get deployment profile -n test-hotel-reservation -o jsonpath='{.spec.template.spec.containers[0].env[*]}' | jq -s '.'\nkubectl exec mongodb-geo-5ff578bcb8-2zn2s -n test-hotel-reservation -- netstat -tlnp | grep 27017 || ss -tlnp | grep 27017\nkubectl exec mongodb-geo-5ff578bcb8-2zn2s -n test-hotel-reservation -- ps aux | grep mongod\nkubectl exec mongodb-geo-5ff578bcb8-2zn2s -n test-hotel-reservation -- mongo --host localhost --port 27017 --eval 'db.runCommand({ping: 1})' --quiet\nkubectl get deployment geo -n test-hotel-reservation -o jsonpath='{.spec.template.spec.containers[0].env[*]}' | jq -s '.'\nkubectl get deployment geo -n test-hotel-reservation -o jsonpath='{.spec.template.spec.containers[0].env}' | python3 -c 'import sys, json; print(json.dumps(json.loads(sys.stdin.read()), indent=2))'\nkubectl exec geo-c47ff745-rgd5z -n test-hotel-reservation -- env | grep -i mongo || echo 'No MongoDB env vars found'\nkubectl get endpoints mongodb-geo -n test-hotel-reservation -o yaml\nkubectl exec mongodb-geo-5ff578bcb8-2zn2s -n test-hotel-reservation -- netstat -tlnp 2>/dev/null | grep 27017 || kubectl exec mongodb-geo-5ff578bcb8-2zn2s -n test-hotel-reservation -- ss -tlnp 2>/dev/null | grep 27017\nkubectl get endpoints mongodb-geo -n test-hotel-reservation -o jsonpath='{.subsets[0].ports[0].port}'\nkubectl set env deployment/geo MONGO_URI=mongodb://mongodb-geo.test-hotel-reservation.svc.cluster.local:27017 -n test-hotel-reservation\nkubectl rollout restart deployment/geo -n test-hotel-reservation\nkubectl get pods -n test-hotel-reservation\nkubectl describe pod geo-c47ff745-rgd5z -n test-hotel-reservation\nkubectl logs geo-c47ff745-rgd5z -n test-hotel-reservation --tail=50",
+    "reasoning": "Root cause: The geo deployment is misconfigured with incorrect MongoDB connection details, leading to failed database connections and service unavailability.",
+    "fault_category": "Configuration",
+    "symptoms": [
+      "pymongo.errors.ConnectionFailure: Could not connect to MongoDB: [Errno 111] Connection refused' in application logs",
+      "Events show 'CrashLoopBackOff' for the geo pod",
+      "pymongo.errors.ConnectionFailure: Could not connect to MongoDB: [Errno 111] Connection refused",
+      "CrashLoopBackOff",
+      "CrashLoopBackOff' for the geo pod"
+    ],
+    "context": {
+      "namespace": "test-hotel-reservation",
+      "resource_type": "Deployment",
+      "service": "unavailability"
+    },
+    "outcomes": [
+      "Environment variable or resource limit applied to deployment",
+      "Pods restarted and returned to Running state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Use Helm sync waves or init containers to ensure ConfigMaps/Secrets exist before Deployments. Validate RBAC requirements at design time with kubectl auth can-i dry-run checks in CI.",
+    "timestamp": 1777462194.4994144
+  },
+  {
+    "id": "kfrd_aoi_00045",
+    "problem": "Kubernetes Configuration fault in namespace 'test-hotel-reservation'. Identify and resolve the root cause of MongoDB authentication failure in the geo-service. Affected: Pods like mongodb-geo-5ff578bcb8-vhdv2, namespace test-hotel-reservation, service geo-db. Symptoms: MongoDB connection failed: auth error: authentication failed. User: \"geo-admin\", DB: \"geo-db. Events show 'CrashLoopBackOff' for the geo-service pods.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-hotel-reservation -o wide",
+      "kubectl describe pod mongodb-geo-5ff578bcb8-vhdv2 -n test-hotel-reservation",
+      "kubectl logs mongodb-geo-5ff578bcb8-vhdv2 -n test-hotel-reservation --tail=100",
+      "kubectl get configmap -n test-hotel-reservation -o yaml",
+      "kubectl get secret mongodb-geo-secret -n test-hotel-reservation -o yaml",
+      "kubectl get deployment mongodb-geo -n test-hotel-reservation -o yaml"
+    ],
+    "final_solution": "kubectl exec -n test-hotel-reservation mongodb-geo-5ff578bcb8-vhdv2 -- mongo geo-db -u geo-admin -p $(kubectl get secret mongodb-geo-secret -n test-hotel-reservation -o jsonpath='{.data.mongo-password}' | base64 --decode) --authenticationDatabase admin --eval 'db.getUsers()'\nkubectl patch secret mongodb-geo-secret -n test-hotel-reservation -p '{\"data\":{\"mongo-password\":\"$(echo -n \"new-secure-password\" | base64)\"}}'\nkubectl delete pod mongodb-geo-5ff578bcb8-vhdv2 -n test-hotel-reservation\nkubectl get pods -n test-hotel-reservation\nkubectl logs mongodb-geo-5ff578bcb8-vhdv2 -n test-hotel-reservation --tail=100\nkubectl describe pod mongodb-geo-5ff578bcb8-vhdv2 -n test-hotel-reservation\nkubectl get pods -n test-hotel-reservation\nkubectl get service geo-db -n test-hotel-reservation",
+    "reasoning": "Root cause: The MongoDB instance for the geo-service is misconfigured with incorrect authentication credentials, leading to connection failures. This results in the geo-service being unable to retrieve location data, causing reservation failures.",
+    "fault_category": "Configuration",
+    "symptoms": [
+      "MongoDB connection failed: auth error: authentication failed",
+      "User: \"geo-admin\", DB: \"geo-db",
+      "Events show 'CrashLoopBackOff' for the geo-service pods",
+      "MongoDB connection failed: auth error: authentication failed. User: \"geo-admin\", DB: \"geo-db",
+      "CrashLoopBackOff"
+    ],
+    "context": {
+      "namespace": "test-hotel-reservation",
+      "resource_type": "Service"
+    },
+    "outcomes": [
+      "Faulty pod deleted and rescheduled by controller",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Use Helm sync waves or init containers to ensure ConfigMaps/Secrets exist before Deployments. Validate RBAC requirements at design time with kubectl auth can-i dry-run checks in CI.",
+    "timestamp": 1777462194.4997654
+  },
+  {
+    "id": "kfrd_aoi_00046",
+    "problem": "Kubernetes Configuration fault in namespace 'test-hotel-reservation'. Your task is to mitigate anomalies related to an unregistered MongoDB instance that is causing service disruptions. Affected: Pods like mongodb-rate-56cc8659c9-qtw5l, namespace test-hotel-reservation, service mongodb-rate, deployment rate. Symptoms: This is due to incorrect configuration in the MongoDB service or deployment. Events show 'Failed to connect to MongoDB. MongoDB connection error: no such host.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-hotel-reservation -o wide",
+      "kubectl describe pod mongodb-rate-56cc8659c9-qtw5l -n test-hotel-reservation",
+      "kubectl get service mongodb-rate -n test-hotel-reservation -o yaml",
+      "kubectl get deployment rate -n test-hotel-reservation -o yaml",
+      "kubectl logs mongodb-rate-56cc8659c9-qtw5l -n test-hotel-reservation --tail=100",
+      "kubectl logs mongodb-rate-56cc8659c9-qtw5l -n test-hotel-reservation --tail=200 | grep -E 'admin|user|auth|delete|drop|error|fail' -i"
+    ],
+    "final_solution": "kubectl exec -n test-hotel-reservation mongodb-rate-56cc8659c9-qtw5l -- mongo admin -u admin -p admin --authenticationDatabase admin --eval 'db.getUsers()'\nkubectl exec -n test-hotel-reservation mongodb-rate-56cc8659c9-qtw5l -- mongo rate-db -u admin -p admin --authenticationDatabase admin --eval 'db.getUsers()'\nkubectl get configmap mongo-rate-script -n test-hotel-reservation -o yaml\nkubectl get configmap failure-admin-rate -n test-hotel-reservation -o yaml\nkubectl exec -n test-hotel-reservation mongodb-rate-56cc8659c9-qtw5l -- cat /scripts/failure-admin-rate.sh\nkubectl exec -n test-hotel-reservation mongodb-rate-56cc8659c9-qtw5l -- which mongo\nkubectl exec mongodb-rate-56cc8659c9-qtw5l -n test-hotel-reservation -- mongo --version\nkubectl set env deployment/rate MONGO_URI=mongodb://admin:admin@mongodb-rate:27017/rate-db --namespace test-hotel-reservation\nkubectl rollout restart deployment/rate -n test-hotel-reservation\nkubectl get pods -n test-hotel-reservation -l app=rate\nkubectl describe pod rate-7bdc978679-d9smf -n test-hotel-reservation\nkubectl logs rate-7bdc978679-d9smf -n test-hotel-reservation --tail=100",
+    "reasoning": "Root cause: The MongoDB instance (mongodb-rate) is not properly registered with the application, leading to connection failures and service unavailability. This is due to incorrect configuration in the MongoDB service or deployment.",
+    "fault_category": "Configuration",
+    "symptoms": [
+      "This is due to incorrect configuration in the MongoDB service or deployment",
+      "Events show 'Failed to connect to MongoDB",
+      "MongoDB connection error: no such host",
+      "unable to connect to MongoDB server",
+      "error connecting to MongoDB: dial tcp: i/o timeout"
+    ],
+    "context": {
+      "namespace": "test-hotel-reservation",
+      "resource_type": "Deployment",
+      "service": "unavailability"
+    },
+    "outcomes": [
+      "Environment variable or resource limit applied to deployment",
+      "Pods restarted and returned to Running state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Use Helm sync waves or init containers to ensure ConfigMaps/Secrets exist before Deployments. Validate RBAC requirements at design time with kubectl auth can-i dry-run checks in CI.",
+    "timestamp": 1777462194.500048
+  },
+  {
+    "id": "kfrd_aoi_00047",
+    "problem": "Kubernetes Configuration fault in namespace 'test-hotel-reservation'. Detect anomalies related to unregistered MongoDB users in the geo-mongodb deployment. Affected: Pods like mongodb-geo-5ff578bcb8-vpmcs, namespace test-hotel-reservation, service mongodb-geo. Symptoms: Events show 'CrashLoopBackOff' for geo-service pods. authentication failed. no users found in admin database.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-hotel-reservation --show-labels -o wide",
+      "kubectl describe pod mongodb-geo-5ff578bcb8-vpmcs -n test-hotel-reservation",
+      "kubectl get deployment mongodb-geo -n test-hotel-reservation -o yaml",
+      "kubectl get configmap mongo-geo-script -n test-hotel-reservation -o yaml"
+    ],
+    "final_solution": "kubectl exec mongodb-geo-5ff578bcb8-vpmcs -n test-hotel-reservation -- mongo admin -u root -p password --eval 'db.system.users.find({user: \"admin\"}).pretty()' --quiet\nkubectl exec mongodb-geo-5ff578bcb8-vpmcs -n test-hotel-reservation -- mongo admin -u root -p password --eval 'db.getUsers()' --quiet\nkubectl exec mongodb-geo-5ff578bcb8-vpmcs -n test-hotel-reservation -- mongo admin -u root -p password --eval 'db.system.users.find({user: \"admin\", db: \"admin\"}).count()' --quiet\nkubectl get pods -n test-hotel-reservation | grep mongodb-geo\nkubectl describe pod mongodb-geo-5ff578bcb8-vpmcs -n test-hotel-reservation | tail -30\nkubectl get deployment geo -n test-hotel-reservation -o jsonpath='{.spec.template.spec.containers[0].env[*]}' && echo ''\nkubectl get deployment geo -n test-hotel-reservation -o jsonpath='{.spec.template.spec.containers[0].command}' && echo '\n---ENV VARS---' && kubectl get deployment geo -n test-hotel-reservation -o jsonpath='{.spec.template.spec.containers[0].env}' && echo ''\nkubectl exec mongodb-geo-5ff578bcb8-vpmcs -n test-hotel-reservation -- mongo admin -u root -p password --eval 'db.createUser({user: \"admin\", pwd: \"password\", roles: [ { role: \"userAdminAnyDatabase\", db: \"admin\" } ] })' --authenticationDatabase admin --quiet\nkubectl exec mongodb-geo-5ff578bcb8-vpmcs -n test-hotel-reservation -- mongo admin -u root -p password --eval 'db.system.users.find({user: \"admin\"}).pretty()' --quiet\nkubectl get pods -n test-hotel-reservation\nkubectl describe pod geo-84fbc958c7-lpqmr -n test-hotel-reservation\nkubectl logs geo-84fbc958c7-lpqmr -n test-hotel-reservation",
+    "reasoning": "Root cause: The MongoDB deployment for geo-database has unregistered admin users, leading to authentication failures and inability to access the database. This results in the geo-service being unable to retrieve hotel data.",
+    "fault_category": "Configuration",
+    "symptoms": [
+      "Events show 'CrashLoopBackOff' for geo-service pods",
+      "authentication failed",
+      "no users found in admin database",
+      "connection refused",
+      "CrashLoopBackOff"
+    ],
+    "context": {
+      "namespace": "test-hotel-reservation",
+      "resource_type": "Deployment"
+    },
+    "outcomes": [
+      "Fault remediated; service restored to healthy state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Use Helm sync waves or init containers to ensure ConfigMaps/Secrets exist before Deployments. Validate RBAC requirements at design time with kubectl auth can-i dry-run checks in CI.",
+    "timestamp": 1777462194.5003734
+  },
+  {
+    "id": "kfrd_aoi_00048",
+    "problem": "Kubernetes Network fault in namespace 'test-hotel-reservation'. list[]: an empty list if no faults were detected. Affected: Pods like frontend-7fc7ddc9db-7htqk, consul-78c8d79bb-7rrml, namespace test-hotel-reservation, service consul, service frontend. Symptoms: Connection timed out. Network delay introduced by chaos. Timed out while waiting for a response.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-hotel-reservation -o wide",
+      "kubectl get services -n test-hotel-reservation -o wide",
+      "kubectl get networkchaos -n test-hotel-reservation",
+      "kubectl describe networkchaos delay -n test-hotel-reservation",
+      "kubectl get pods -n test-hotel-reservation --field-selector=status.phase=Pending",
+      "kubectl logs frontend-7fc7ddc9db-7htqk -n test-hotel-reservation --tail=50"
+    ],
+    "final_solution": "kubectl exec -n test-hotel-reservation frontend-7fc7ddc9db-7htqk -- curl -v http://consul:8500/v1/status/leader\nkubectl get events -n test-hotel-reservation --sort-by='.lastTimestamp' --field-selector type!=Normal\nkubectl delete networkchaos delay -n test-hotel-reservation\nkubectl get pods -n test-hotel-reservation -o wide\nkubectl logs frontend-7fc7ddc9db-7htqk -n test-hotel-reservation --tail=50\nkubectl exec -n test-hotel-reservation frontend-7fc7ddc9db-7htqk -- curl -v http://consul:8500/v1/status/leader\nkubectl get networkchaos -n test-hotel-reservation\nkubectl get pods -n test-hotel-reservation --field-selector=status.phase=Running\nkubectl describe pod frontend-7fc7ddc9db-7htqk -n test-hotel-reservation",
+    "reasoning": "Root cause: A network chaos experiment was applied to the 'consul' service, introducing network delays between the frontend and consul service, leading to increased latency in service discovery and communication.",
+    "fault_category": "Network",
+    "symptoms": [
+      "Connection timed out",
+      "Network delay introduced by chaos",
+      "Timed out while waiting for a response"
+    ],
+    "context": {
+      "namespace": "test-hotel-reservation",
+      "resource_type": "Service",
+      "service": "discovery"
+    },
+    "outcomes": [
+      "Fault remediated; service restored to healthy state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Validate service targetPort matches containerPort before deploy. Document required traffic flows before applying NetworkPolicy. Use IngressClass with health checks.",
+    "timestamp": 1777462194.50066
+  },
+  {
+    "id": "kfrd_aoi_00049",
+    "problem": "Kubernetes Network fault in namespace 'test-hotel-reservation'. Detect anomalies in the service. Affected: Pods like frontend-7fc7ddc9db-nzx4z, geo-84fbc958c7-mflgj, namespace test-hotel-reservation, service geo-service. Symptoms: t have a resource type \"Pod\". Error: the server doesn. . Error: the server doesn't have a resource type. Failed to list *v1.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-hotel-reservation -o wide",
+      "kubectl get services,deployments -n test-hotel-reservation -o wide",
+      "kubectl describe service geo-service -n test-hotel-reservation",
+      "kubectl get deployment geo-service -n test-hotel-reservation -o yaml",
+      "kubectl describe pod geo-84fbc958c7-mflgj -n test-hotel-reservation",
+      "kubectl logs frontend-7fc7ddc9db-nzx4z -n test-hotel-reservation --tail=100"
+    ],
+    "final_solution": "kubectl patch deployment geo-service -n test-hotel-reservation -p '{\"spec\":{\"selector\":{\"matchLabels\":{\"app\":\"geo-service\",\"tier\":\"backend\"}}}}'\nkubectl rollout status deployment/geo-service -n test-hotel-reservation\nkubectl get pods -n test-hotel-reservation -l app=geo-service\nkubectl describe pod frontend-7fc7ddc9db-nzx4z -n test-hotel-reservation\nkubectl logs frontend-7fc7ddc9db-nzx4z -n test-hotel-reservation --tail=100",
+    "reasoning": "Root cause: Network latency between the frontend service and the geo-service due to a misconfigured service selector in the geo-service deployment, causing communication delays. This results in slow response times and timeouts for hotel search requests.",
+    "fault_category": "Network",
+    "symptoms": [
+      "t have a resource type \"Pod\". Error: the server doesn",
+      ". Error: the server doesn't have a resource type",
+      "Failed to list *v1",
+      "Error: the server doesn't have a resource type \"Pod\"'; logs show increased latency an",
+      "errors in frontend service"
+    ],
+    "context": {
+      "namespace": "test-hotel-reservation",
+      "resource_type": "Deployment",
+      "service": "and"
+    },
+    "outcomes": [
+      "Fault remediated; service restored to healthy state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Validate service targetPort matches containerPort before deploy. Document required traffic flows before applying NetworkPolicy. Use IngressClass with health checks.",
+    "timestamp": 1777462194.5009084
+  },
+  {
+    "id": "kfrd_aoi_00050",
+    "problem": "Kubernetes Network fault in namespace 'test-hotel-reservation'. You are requested to identify the service(s) where the root cause of the fault lies. Affected: Pods like consul-78c8d79bb-hj2gg and frontend-7fc7ddc9db-bnrrc, namespace test-hotel-reservation, service consul, service frontend. Symptoms: connection refused. no route to host. errors in frontend logs when trying to reach Consul, 'no route to host' in netstat ou.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-hotel-reservation -o wide",
+      "kubectl get services -n test-hotel-reservation -o wide",
+      "kubectl get deployments -n test-hotel-reservation -o wide",
+      "kubectl get networkpolicies -n test-hotel-reservation",
+      "kubectl describe service consul -n test-hotel-reservation",
+      "kubectl describe service frontend -n test-hotel-reservation"
+    ],
+    "final_solution": "kubectl exec -n test-hotel-reservation frontend-7fc7ddc9db-bnrrc -- nc -zv 10.244.1.249 8500\nkubectl get networkpolicy frontend-consul-policy -n test-hotel-reservation -o yaml\nkubectl delete networkpolicy frontend-consul-policy -n test-hotel-reservation\nkubectl get pods -n test-hotel-reservation -o wide\nkubectl exec -n test-hotel-reservation frontend-7fc7ddc9db-bnrrc -- nc -zv 10.244.1.249 8500\nkubectl logs frontend-7fc7ddc9db-bnrrc -n test-hotel-reservation --tail=50 | grep -E 'Consul|error|connection refused'",
+    "reasoning": "Root cause: The Consul service is not reachable from the frontend service due to a misconfigured network policy that blocks traffic between the frontend and Consul pods. This results in the frontend being unable to discover services and communicate with Consul, leading to failed reservations and recommendations.",
+    "fault_category": "Network",
+    "symptoms": [
+      "connection refused",
+      "no route to host",
+      "errors in frontend logs when trying to reach Consul, 'no route to host' in netstat ou"
+    ],
+    "context": {
+      "namespace": "test-hotel-reservation",
+      "resource_type": "Service"
+    },
+    "outcomes": [
+      "Fault remediated; service restored to healthy state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Validate service targetPort matches containerPort before deploy. Document required traffic flows before applying NetworkPolicy. Use IngressClass with health checks.",
+    "timestamp": 1777462194.5011396
+  },
+  {
+    "id": "kfrd_aoi_00051",
+    "problem": "Kubernetes Network fault in namespace 'test-hotel-reservation'. Detect anomalies in the service. Affected: Pods like frontend-7fc7ddc9db-pgcr6, search-5c64c8f5bc-wsjjw, profile-8b6dd7c6c-xpc4r, namespace test-hotel-reservation, service consul. Symptoms: Network loss between the frontend pods and the consul service, causing failures in service discovery and communication. Connection refused' when attempting to connect to consul:8500 from frontend pods. Events show 'Failed to connect to consul service.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-hotel-reservation -o wide",
+      "kubectl get services -n test-hotel-reservation -o wide",
+      "kubectl get endpoints -n test-hotel-reservation -o wide",
+      "kubectl get events -n test-hotel-reservation --sort-by='.lastTimestamp' --field-selector type!=Normal | tail -50",
+      "kubectl describe pod frontend-7fc7ddc9db-pgcr6 -n test-hotel-reservation",
+      "kubectl logs frontend-7fc7ddc9db-pgcr6 -n test-hotel-reservation --tail=100 | grep -i 'consul\\|connection\\|refused\\|error'"
+    ],
+    "final_solution": "kubectl exec -n test-hotel-reservation frontend-7fc7ddc9db-pgcr6 -- nc -zv consul 8500\nkubectl get service consul -n test-hotel-reservation -o yaml\nkubectl get endpoints consul -n test-hotel-reservation -o yaml\nkubectl get networkpolicies -n test-hotel-reservation -o yaml\nkubectl describe service consul -n test-hotel-reservation\nkubectl get pods -n kube-system -l k8s-app=kube-proxy -o wide\nkubectl logs -n kube-system -l k8s-app=kube-proxy --tail=100 | grep -i 'error\\|fail\\|refused\\|drop\\|packet'\nkubectl get pods -n kube-system -l k8s-app=kindnet -o wide\nkubectl delete networkpolicy restrictive-policy -n test-hotel-reservation\nkubectl get pods -n test-hotel-reservation -o wide\nkubectl describe pod frontend-7fc7ddc9db-pgcr6 -n test-hotel-reservation\nkubectl exec -n test-hotel-reservation frontend-7fc7ddc9db-pgcr6 -- nc -zv consul 8500\nkubectl logs frontend-7fc7ddc9db-pgcr6 -n test-hotel-reservation --tail=100 | grep -i 'consul\\|connection\\|refused\\|error'",
+    "reasoning": "Root cause: Network loss between the frontend pods and the consul service, causing failures in service discovery and communication. This results in frontend pods being unable to reach the consul service, leading to service unavailability.",
+    "fault_category": "Network",
+    "symptoms": [
+      "Network loss between the frontend pods and the consul service, causing failures in service discovery and communication",
+      "Connection refused' when attempting to connect to consul:8500 from frontend pods",
+      "Events show 'Failed to connect to consul service",
+      "Connection refused",
+      "Failed to connect to consul service"
+    ],
+    "context": {
+      "namespace": "test-hotel-reservation",
+      "resource_type": "Service",
+      "service": "discovery"
+    },
+    "outcomes": [
+      "Fault remediated; service restored to healthy state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Validate service targetPort matches containerPort before deploy. Document required traffic flows before applying NetworkPolicy. Use IngressClass with health checks.",
+    "timestamp": 1777462194.5014167
+  },
+  {
+    "id": "kfrd_aoi_00052",
+    "problem": "Kubernetes System fault in namespace 'astronomy-shop'. Detect anomalies in the service's state and telemetry. Affected: Pods like checkout-7864986784-2jqhk, namespace astronomy-shop, service checkout. Symptoms: Error: failed to wait for container readiness: context deadline exceeded' in the service logs. Events show 'FailedReadinessProbe' and 'PodReadyButNotAvailable. Error: failed to wait for container readiness: context deadline exceeded.",
+    "attempted_solutions": [
+      "kubectl get pods -n astronomy-shop -o wide",
+      "kubectl get deployments,statefulsets -n astronomy-shop -o wide",
+      "kubectl get events -n astronomy-shop --sort-by='.lastTimestamp' --field-selector type!=Normal | tail -50",
+      "kubectl get services -n astronomy-shop -o wide",
+      "kubectl describe pod checkout-7864986784-2jqhk -n astronomy-shop",
+      "kubectl logs checkout-7864986784-2jqhk -n astronomy-shop --tail=50"
+    ],
+    "final_solution": "kubectl exec -n astronomy-shop checkout-7864986784-2jqhk -- curl -s http://localhost:8080/health\nkubectl patch deployment checkout -n astronomy-shop -p '{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"checkout\",\"readinessProbe\":{\"initialDelaySeconds\":10,\"periodSeconds\":5}}]}}}}'\nkubectl rollout status deployment checkout -n astronomy-shop\nkubectl get pods -n astronomy-shop -l opentelemetry.io/name=checkout\nkubectl describe pod checkout-7864986784-2jqhk -n astronomy-shop\nkubectl logs checkout-7864986784-2jqhk -n astronomy-shop --since=1m\nkubectl exec -n astronomy-shop checkout-7864986784-2jqhk -- curl -s http://localhost:8080/health\nkubectl get service checkout -n astronomy-shop -o yaml",
+    "reasoning": "Root cause: The checkout service is experiencing high latency due to an incorrect configuration in the service's readiness probe, causing the service to be marked as not ready and leading to request timeouts.",
+    "fault_category": "System",
+    "symptoms": [
+      "Error: failed to wait for container readiness: context deadline exceeded' in the service logs",
+      "Events show 'FailedReadinessProbe' and 'PodReadyButNotAvailable",
+      "Error: failed to wait for container readiness: context deadline exceeded",
+      "FailedReadinessProbe",
+      "PodReadyButNotAvailable"
+    ],
+    "context": {
+      "namespace": "astronomy-shop",
+      "resource_type": "Service",
+      "service": "checkout"
+    },
+    "outcomes": [
+      "Fault remediated; service restored to healthy state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Configure kubelet log rotation and container log max-size. Monitor node disk, memory, and container runtime health. Automate certificate renewal with cert-manager.",
+    "timestamp": 1777462194.5016828
+  },
+  {
+    "id": "kfrd_aoi_00053",
+    "problem": "Kubernetes System fault in namespace 'test-hotel-reservation'. Detect anomalies in the service. Affected: Pods like mongodb-user-7df8685f74-2jqhk, namespace test-hotel-reservation, service mongodb-user, deployment mongodb-user. Symptoms: Error connecting to MongoDB: no reachable servers' from the pod logs. Events show 'CrashLoopBackOff' and 'Failed to pull image' due to incorrect image tag. Error connecting to MongoDB: no reachable servers.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-hotel-reservation -o wide",
+      "kubectl get events -n test-hotel-reservation --sort-by='.lastTimestamp' --field-selector type!=Normal",
+      "kubectl get services,deployments -n test-hotel-reservation -o wide",
+      "kubectl describe pod mongodb-user-7df8685f74-2jqhk -n test-hotel-reservation",
+      "kubectl logs mongodb-user-7df8685f74-2jqhk -n test-hotel-reservation --previous --tail=100",
+      "kubectl logs mongodb-user-7df8685f74-2jqhk -n test-hotel-reservation --tail=50"
+    ],
+    "final_solution": "kubectl patch deployment mongodb-user -n test-hotel-reservation -p '{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"mongodb\",\"env\":[{\"name\":\"MONGO_URI\",\"value\":\"mongodb://mongodb-user:27017\"}]}}]}}}'\nkubectl rollout restart deployment/mongodb-user -n test-hotel-reservation\nkubectl get pods -n test-hotel-reservation -o wide\nkubectl describe pod mongodb-user-7df8685f74-2jqhk -n test-hotel-reservation\nkubectl logs mongodb-user-7df8685f74-2jqhk -n test-hotel-reservation --tail=50",
+    "reasoning": "Root cause: The MongoDB user database pod is in a CrashLoopBackOff state due to a misconfigured connection string in the deployment configuration, causing the application to fail on startup. This results in the user service being unable to access the database and hence failing to process requests.",
+    "fault_category": "System",
+    "symptoms": [
+      "Error connecting to MongoDB: no reachable servers' from the pod logs",
+      "Events show 'CrashLoopBackOff' and 'Failed to pull image' due to incorrect image tag",
+      "Error connecting to MongoDB: no reachable servers",
+      "CrashLoopBackOff",
+      "Failed to pull image"
+    ],
+    "context": {
+      "namespace": "test-hotel-reservation",
+      "resource_type": "Deployment"
+    },
+    "outcomes": [
+      "Pods restarted and returned to Running state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Configure kubelet log rotation and container log max-size. Monitor node disk, memory, and container runtime health. Automate certificate renewal with cert-manager.",
+    "timestamp": 1777462194.5019476
+  },
+  {
+    "id": "kfrd_aoi_00054",
+    "problem": "Kubernetes System fault in namespace 'test-social-network'. Detect anomalies in the service. Affected: Pods like user-service-5b549cc8dc-4wfmd, namespace test-social-network, service user-service, nodes with labels 'kubernetes. Symptoms: 0/3 nodes are available: 1 node(s) had taints that the pod did not tolerate, 2 node(s) didn. Events show. FailedScheduling.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-social-network",
+      "kubectl get deployments -n test-social-network",
+      "kubectl get events -n test-social-network --sort-by='.lastTimestamp' --field-selector type!=Normal",
+      "kubectl describe pod user-service-5b549cc8dc-4wfmd -n test-social-network",
+      "kubectl logs user-service-5b549cc8dc-4wfmd -n test-social-network",
+      "kubectl get pod user-service-5b549cc8dc-4wfmd -n test-social-network -o yaml"
+    ],
+    "final_solution": "kubectl patch deployment user-service -n test-social-network -p '{\"spec\":{\"template\":{\"spec\":{\"affinity\":{\"nodeAffinity\":{\"requiredDuringSchedulingIgnoredDuringExecution\":{\"nodeSelectorTerms\":[{\"matchExpressions\":[{\"key\":\"kubernetes.io/hostname\",\"operator\":\"In\",\"values\":[\"node-1\"]}]}}]}}}}}}'\nkubectl rollout status deployment/user-service -n test-social-network\nkubectl get pods -n test-social-network\nkubectl describe pod user-service-5b549cc8dc-4wfmd -n test-social-network\nkubectl logs user-service-5b549cc8dc-4wfmd -n test-social-network",
+    "reasoning": "Root cause: The user-service deployment has a node affinity rule that specifies a non-existent node label, causing pods to remain in Pending state. This results in the service being unavailable.",
+    "fault_category": "System",
+    "symptoms": [
+      "0/3 nodes are available: 1 node(s) had taints that the pod did not tolerate, 2 node(s) didn",
+      "Events show",
+      "FailedScheduling"
+    ],
+    "context": {
+      "namespace": "test-social-network",
+      "resource_type": "Deployment"
+    },
+    "outcomes": [
+      "Scheduling constraint corrected; pods scheduled successfully",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Configure kubelet log rotation and container log max-size. Monitor node disk, memory, and container runtime health. Automate certificate renewal with cert-manager.",
+    "timestamp": 1777462194.5021777
+  },
+  {
+    "id": "kfrd_aoi_00055",
+    "problem": "Kubernetes System fault in namespace 'astronomy-shop'. You are requested to identify the service(s) where the root cause of the fault lies. Affected: Pods like otel-collector-d78bcbbcc-65qdb, namespace astronomy-shop, service otel-collector. Symptoms: listen tcp 0.0.0.0:4317: bind: address already in use' in the logs. Events show 'CrashLoopBackOff' for the otel-collector pod. listen tcp 0.0.0.0:4317: bind: address already in use.",
+    "attempted_solutions": [
+      "kubectl get pods -n astronomy-shop -o wide",
+      "kubectl get services -n astronomy-shop -o wide",
+      "kubectl get events -n astronomy-shop --sort-by='.lastTimestamp' --field-selector type=Warning",
+      "kubectl describe pod otel-collector-d78bcbbcc-65qdb -n astronomy-shop",
+      "kubectl logs otel-collector-d78bcbbcc-65qdb -n astronomy-shop --tail=100",
+      "kubectl get service otel-collector -n astronomy-shop -o yaml"
+    ],
+    "final_solution": "kubectl exec otel-collector-d78bcbbcc-65qdb -n astronomy-shop -- netstat -tuln | grep 4317\nkubectl get pod -n astronomy-shop -o jsonpath='{range .items[*]}{.metadata.name}{'\n'}{end}'\nkubectl get pod -n astronomy-shop -o jsonpath='{range .items[*]}{.status.phase}{'\n'}{end}'\nkubectl get pod -n astronomy-shop -o jsonpath='{range .items[*]}{.status.reason}{'\n'}{end}'\nkubectl get pod -n astronomy-shop -o jsonpath='{range .items[*]}{.status.message}{'\n'}{end}'\nkubectl delete pod otel-collector-d78bcbbcc-65qdb -n astronomy-shop\nkubectl get pod -n astronomy-shop -o wide\nkubectl get pods -n astronomy-shop -o jsonpath='{range .items[*]}{.status.phase}{'\n'}{end}'\nkubectl logs otel-collector-d78bcbbcc-65qdb -n astronomy-shop --tail=100",
+    "reasoning": "Root cause: The OpenTelemetry Collector (otel-collector) service is failing to start due to a port conflict on 4317, preventing trace collection and causing observability issues. This results in missing traces and logs in the monitoring system.",
+    "fault_category": "System",
+    "symptoms": [
+      "listen tcp 0.0.0.0:4317: bind: address already in use' in the logs",
+      "Events show 'CrashLoopBackOff' for the otel-collector pod",
+      "listen tcp 0.0.0.0:4317: bind: address already in use",
+      "CrashLoopBackOff",
+      "CrashLoopBackOff' for the otel-collector pod"
+    ],
+    "context": {
+      "namespace": "astronomy-shop",
+      "resource_type": "Service",
+      "service": "otel-collector"
+    },
+    "outcomes": [
+      "Faulty pod deleted and rescheduled by controller",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Configure kubelet log rotation and container log max-size. Monitor node disk, memory, and container runtime health. Automate certificate renewal with cert-manager.",
+    "timestamp": 1777462194.5024378
+  },
+  {
+    "id": "kfrd_aoi_00056",
+    "problem": "Kubernetes Configuration fault in namespace 'astronomy-shop'. Identify the service(s) where the root cause of the fault lies. Affected: Pod payment-5cdcbc7597-4xrjz, namespace astronomy-shop, service payment. Symptoms: ERROR: failed to initialize OpenTelemetry exporter: invalid endpoint URL http://otel-collector:4318. Events show 'CrashLoopBackOff' and 'Error: failed to start component. CrashLoopBackOff.",
+    "attempted_solutions": [
+      "kubectl get pods -n astronomy-shop",
+      "kubectl describe pod payment-5cdcbc7597-4xrjz -n astronomy-shop",
+      "kubectl logs payment-5cdcbc7597-4xrjz -n astronomy-shop --tail=50",
+      "kubectl get deployment payment -n astronomy-shop -o yaml",
+      "kubectl get service otel-collector -n astronomy-shop",
+      "kubectl get pods -n astronomy-shop -l app=otel-collector"
+    ],
+    "final_solution": "kubectl rollout status deployment/payment -n astronomy-shop\nkubectl get pods -n astronomy-shop\nkubectl describe pod payment-5cdcbc7597-4xrjz -n astronomy-shop\nkubectl logs payment-5cdcbc7597-4xrjz -n astronomy-shop --tail=50\nkubectl get events -n astronomy-shop --field-selector involvedObject.name=payment,involvedObject.kind=Pod --sort-by='.lastTimestamp'\nkubectl get pods -n astronomy-shop",
+    "reasoning": "Root cause: The payment service deployment is in a CrashLoopBackOff state due to a misconfigured environment variable pointing to an invalid OpenTelemetry endpoint. This causes the service to fail on startup.",
+    "fault_category": "Configuration",
+    "symptoms": [
+      "ERROR: failed to initialize OpenTelemetry exporter: invalid endpoint URL http://otel-collector:4318",
+      "Events show 'CrashLoopBackOff' and 'Error: failed to start component",
+      "CrashLoopBackOff",
+      "Error: failed to start component",
+      "ERROR: failed to initialize OpenTelemetry exporter: invalid endpoint URL http://otel-"
+    ],
+    "context": {
+      "namespace": "astronomy-shop",
+      "resource_type": "Deployment",
+      "pod": "payment-5cdcbc7597-4xrjz"
+    },
+    "outcomes": [
+      "Fault remediated; service restored to healthy state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Use Helm sync waves or init containers to ensure ConfigMaps/Secrets exist before Deployments. Validate RBAC requirements at design time with kubectl auth can-i dry-run checks in CI.",
+    "timestamp": 1777462194.5026686
+  },
+  {
+    "id": "kfrd_aoi_00057",
+    "problem": "Kubernetes Configuration fault in namespace 'astronomy-shop'. Identify the service(s) where the root cause of the fault lies. Affected: Pods like payment-5cdcbc7597-4xrjz, namespace astronomy-shop, service payment. Symptoms: Error connecting to OpenTelemetry collector: dial tcp: i/o timeout' in pod logs. Events show 'CrashLoopBackOff' status. Error connecting to OpenTelemetry collector: dial tcp: i/o timeout.",
+    "attempted_solutions": [
+      "kubectl get pods -n astronomy-shop",
+      "kubectl describe pod payment-5cdcbc7597-4xrjz -n astronomy-shop",
+      "kubectl logs payment-5cdcbc7597-4xrjz -n astronomy-shop --tail=100",
+      "kubectl get deployment payment -n astronomy-shop -o yaml",
+      "kubectl get service opentelemetry-collector -n astronomy-shop",
+      "kubectl get pods -n astronomy-shop -o wide"
+    ],
+    "final_solution": "kubectl set env deployment/payment OTEL_EXPORTER_OTLP_ENDPOINT=http://opentelemetry-collector.opentelemetry.svc.cluster.local:4317 -n astronomy-shop\nkubectl rollout restart deployment/payment -n astronomy-shop\nkubectl get pods -n astronomy-shop\nkubectl describe pod payment-5cdcbc7597-4xrjz -n astronomy-shop\nkubectl logs payment-5cdcbc7597-4xrjz -n astronomy-shop --tail=100",
+    "reasoning": "Root cause: The payment service deployment is failing due to an invalid environment variable configuration pointing to a non-existent OpenTelemetry collector endpoint. This causes the payment service pods to crash-loop.",
+    "fault_category": "Configuration",
+    "symptoms": [
+      "Error connecting to OpenTelemetry collector: dial tcp: i/o timeout' in pod logs",
+      "Events show 'CrashLoopBackOff' status",
+      "Error connecting to OpenTelemetry collector: dial tcp: i/o timeout",
+      "CrashLoopBackOff",
+      "CrashLoopBackOff' status"
+    ],
+    "context": {
+      "namespace": "astronomy-shop",
+      "resource_type": "Deployment"
+    },
+    "outcomes": [
+      "Environment variable or resource limit applied to deployment",
+      "Pods restarted and returned to Running state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Use Helm sync waves or init containers to ensure ConfigMaps/Secrets exist before Deployments. Validate RBAC requirements at design time with kubectl auth can-i dry-run checks in CI.",
+    "timestamp": 1777462194.5028799
+  },
+  {
+    "id": "kfrd_aoi_00058",
+    "problem": "Kubernetes Configuration fault in namespace 'astronomy-shop'. Detect anomalies in the payment service. Affected: Pods like payment-5cdcbc7597-jrm4v, namespace astronomy-shop, service payment, deployment payment. Symptoms: ECONNREFUSED' errors in frontend logs when attempting to connect to the payment service. Service endpoints show no available pods. ECONNREFUSED.",
+    "attempted_solutions": [
+      "kubectl get pods -n astronomy-shop",
+      "kubectl get services -n astronomy-shop",
+      "kubectl get deployments -n astronomy-shop",
+      "kubectl get events -n astronomy-shop --sort-by='.lastTimestamp' --field-selector type!=Normal | tail -50",
+      "kubectl describe service payment -n astronomy-shop",
+      "kubectl describe deployment payment -n astronomy-shop"
+    ],
+    "final_solution": "kubectl patch service payment -n astronomy-shop -p '{\"spec\":{\"selector\":{\"app\":\"payment\"}}}'\nkubectl get endpoints payment -n astronomy-shop\nkubectl logs -n astronomy-shop frontend-5677b56787-6s65p --tail=50 | grep -i 'checkout\\|ECONNREFUSED\\|error'\nkubectl get pods -n astronomy-shop",
+    "reasoning": "Root cause: The payment service is unreachable due to a misconfigured service selector in the payment service's Kubernetes Service resource, causing the frontend to fail when attempting to process payments. This results in errors during the checkout process.",
+    "fault_category": "Configuration",
+    "symptoms": [
+      "ECONNREFUSED' errors in frontend logs when attempting to connect to the payment service",
+      "Service endpoints show no available pods",
+      "ECONNREFUSED",
+      "errors in frontend logs when attempting to connect to the payment service"
+    ],
+    "context": {
+      "namespace": "astronomy-shop",
+      "resource_type": "Deployment",
+      "service": "selector"
+    },
+    "outcomes": [
+      "Fault remediated; service restored to healthy state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Use Helm sync waves or init containers to ensure ConfigMaps/Secrets exist before Deployments. Validate RBAC requirements at design time with kubectl auth can-i dry-run checks in CI.",
+    "timestamp": 1777462194.5033545
+  },
+  {
+    "id": "kfrd_aoi_00059",
+    "problem": "Kubernetes System fault in namespace 'test-hotel-reservation'. Detect anomalies in the service. Affected: Pods like user-66d5d6f874-wj664, namespace test-hotel-reservation, service user, nodes with labels 'kubernetes. Symptoms: 0/3 nodes are available: 1 node(s) had taints that the pod did not tolerate, 2 node(s) didn. Events show. FailedScheduling.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-hotel-reservation --show-labels -o wide",
+      "kubectl get deployments -n test-hotel-reservation",
+      "kubectl describe pod user-66d5d6f874-wj664 -n test-hotel-reservation",
+      "kubectl get events -n test-hotel-reservation --field-selector involvedObject.name=user-66d5d6f874-wj664 --sort-by='.lastTimestamp' -o wide",
+      "kubectl get deployment user -n test-hotel-reservation -o yaml",
+      "kubectl get pod user-66d5d6f874-wj664 -n test-hotel-reservation -o yaml"
+    ],
+    "final_solution": "kubectl patch deployment user -n test-hotel-reservation -p '{\"spec\":{\"template\":{\"spec\":{\"affinity\":{\"nodeAffinity\":{\"requiredDuringSchedulingIgnoredDuringExecution\":{\"nodeSelectorTerms\":[{\"matchExpressions\":[{\"key\":\"kubernetes.io/hostname\",\"operator\":\"In\",\"values\":[\"existing-node\"]}]}}]}}}}}}'\nkubectl get pods -n test-hotel-reservation -o wide\nkubectl describe pod user-66d5d6f874-wj664 -n test-hotel-reservation\nkubectl get events -n test-hotel-reservation --field-selector involvedObject.name=user-66d5d6f874-wj664 --sort-by='.lastTimestamp' -o wide\nkubectl logs user-66d5d6f874-wj664 -n test-hotel-reservation --tail=50",
+    "reasoning": "Root cause: The user-service deployment has a node affinity rule that specifies a non-existent node label, causing pods to remain in Pending state. This results in the service being unavailable.",
+    "fault_category": "System",
+    "symptoms": [
+      "0/3 nodes are available: 1 node(s) had taints that the pod did not tolerate, 2 node(s) didn",
+      "Events show",
+      "FailedScheduling"
+    ],
+    "context": {
+      "namespace": "test-hotel-reservation",
+      "resource_type": "Deployment"
+    },
+    "outcomes": [
+      "Scheduling constraint corrected; pods scheduled successfully",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Configure kubelet log rotation and container log max-size. Monitor node disk, memory, and container runtime health. Automate certificate renewal with cert-manager.",
+    "timestamp": 1777462194.5037322
+  },
+  {
+    "id": "kfrd_aoi_00060",
+    "problem": "Kubernetes System fault in namespace 'test-hotel-reservation'. You are requested to identify the service(s) where the root cause of the fault lies. Affected: Pods like consul-78c8d79bb-m9g54, frontend-7fc7ddc9db-spxhn, search-5c64c8f5bc-6qclq, namespace test-hotel-reservation, service consul. Symptoms: Consul agent failed to start: invalid health check endpoint. Events show 'CrashLoopBackOff' for the consul pod. CrashLoopBackOff.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-hotel-reservation -o wide",
+      "kubectl get services -n test-hotel-reservation -o wide",
+      "kubectl get events -n test-hotel-reservation --sort-by='.lastTimestamp' --field-selector type!=Normal",
+      "kubectl describe pod consul-78c8d79bb-m9g54 -n test-hotel-reservation",
+      "kubectl logs consul-78c8d79bb-m9g54 -n test-hotel-reservation --tail=50",
+      "kubectl get deployment consul -n test-hotel-reservation -o yaml"
+    ],
+    "final_solution": "kubectl exec consul-78c8d79bb-m9g54 -n test-hotel-reservation -- consul agent -config-file=/etc/consul.d/consul.json\nkubectl edit deployment consul -n test-hotel-reservation\nkubectl get pods -n test-hotel-reservation -o wide\nkubectl describe pod consul-78c8d79bb-m9g54 -n test-hotel-reservation\nkubectl logs consul-78c8d79bb-m9g54 -n test-hotel-reservation --tail=50\nkubectl get pods -n test-hotel-reservation -o custom-columns='NAME:.metadata.name,STATUS:.status.phase,READY:.status.conditions[?(@.type==\"Ready\")].status,RESTARTS:.status.containerStatuses[0].restartCount'\nkubectl get pods -n test-hotel-reservation -o wide",
+    "reasoning": "Root cause: The consul service pod is repeatedly crashing due to a misconfigured health check endpoint, leading to cascading failures in dependent services like frontend and search. This results in intermittent service unavailability and increased latency.",
+    "fault_category": "System",
+    "symptoms": [
+      "Consul agent failed to start: invalid health check endpoint",
+      "Events show 'CrashLoopBackOff' for the consul pod",
+      "CrashLoopBackOff",
+      "failed to start: invalid health check endpoint",
+      "CrashLoopBackOff' for the consul pod"
+    ],
+    "context": {
+      "namespace": "test-hotel-reservation",
+      "resource_type": "Service"
+    },
+    "outcomes": [
+      "Fault remediated; service restored to healthy state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Configure kubelet log rotation and container log max-size. Monitor node disk, memory, and container runtime health. Automate certificate renewal with cert-manager.",
+    "timestamp": 1777462194.503971
+  },
+  {
+    "id": "kfrd_aoi_00061",
+    "problem": "Kubernetes System fault in namespace 'test-hotel-reservation'. Detect anomalies in the service. Affected: Pods like frontend-7fc7ddc9db-m4456, namespace test-hotel-reservation, service frontend. Symptoms: Events show 'PodKill' due to a chaos experiment. Error from server: pod frontend-7fc7ddc9db-m4456 not found. crashLoopBackOff.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-hotel-reservation",
+      "kubectl get deployments -n test-hotel-reservation",
+      "kubectl get events -n test-hotel-reservation --sort-by='.lastTimestamp' --field-selector type!=Normal",
+      "kubectl describe pod frontend-7fc7ddc9db-m4456 -n test-hotel-reservation",
+      "kubectl logs frontend-7fc7ddc9db-m4456 -n test-hotel-reservation --previous",
+      "kubectl get podchaos -n test-hotel-reservation"
+    ],
+    "final_solution": "kubectl delete podchaos frontend-chaos -n test-hotel-reservation\nkubectl delete pod frontend-7fc7ddc9db-m4456 -n test-hotel-reservation\nkubectl scale deployment frontend -n test-hotel-reservation --replicas=2\nkubectl get pods -n test-hotel-reservation\nkubectl describe pod frontend-7fc7ddc9db-2q9xk -n test-hotel-reservation\nkubectl logs frontend-7fc7ddc9db-2q9xk -n test-hotel-reservation\nkubectl get services -n test-hotel-reservation\nkubectl get endpoints frontend -n test-hotel-reservation",
+    "reasoning": "Root cause: A pod in the 'frontend' deployment was intentionally terminated by a chaos experiment, causing the service to become unresponsive and leading to increased latency in user requests.",
+    "fault_category": "System",
+    "symptoms": [
+      "Events show 'PodKill' due to a chaos experiment",
+      "Error from server: pod frontend-7fc7ddc9db-m4456 not found",
+      "crashLoopBackOff",
+      "Error from server: pod frontend-7fc7ddc9db-m4456 not found' in describe commands, log",
+      "crashLoopBackOff' for the frontend container"
+    ],
+    "context": {
+      "namespace": "test-hotel-reservation",
+      "resource_type": "Deployment",
+      "pod": "frontend-7fc7ddc9db-m4456"
+    },
+    "outcomes": [
+      "Faulty pod deleted and rescheduled by controller",
+      "Deployment scaled; pods available",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Configure kubelet log rotation and container log max-size. Monitor node disk, memory, and container runtime health. Automate certificate renewal with cert-manager.",
+    "timestamp": 1777462194.5041811
+  },
+  {
+    "id": "kfrd_aoi_00062",
+    "problem": "Kubernetes Scheduling fault in namespace 'test-social-network'. Detect anomalies in the user-service deployment. Affected: Pods like user-service-5b549cc8dc-4wfmd, namespace test-social-network, service user-service, nodes with labels 'kubernetes. Symptoms: 0/3 nodes are available: 1 node(s) had taints that the pod did not tolerate, 2 node(s) didn. Events show. FailedScheduling.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-social-network",
+      "kubectl get deployments -n test-social-network",
+      "kubectl describe deployment user-service -n test-social-network",
+      "kubectl get events -n test-social-network --sort-by='.lastTimestamp' | grep -iE 'error|warn|fail|unhealthy' | tail -20",
+      "kubectl describe pod user-service-5b549cc8dc-4wfmd -n test-social-network",
+      "kubectl get pod user-service-5b549cc8dc-4wfmd -n test-social-network -o yaml"
+    ],
+    "final_solution": "kubectl patch deployment user-service -n test-social-network -p '{\"spec\":{\"template\":{\"spec\":{\"affinity\":{\"nodeAffinity\":{\"requiredDuringSchedulingIgnoredDuringExecution\":{\"nodeSelectorTerms\":[{\"matchExpressions\":[{\"key\":\"kubernetes.io/hostname\",\"operator\":\"In\",\"values\":[\"existing-node\"]}]}]}}}}}}'\nkubectl get pods -n test-social-network\nkubectl describe pod user-service-5b549cc8dc-4wfmd -n test-social-network\nkubectl logs user-service-5b549cc8dc-4wfmd -n test-social-network\nkubectl get events -n test-social-network --sort-by='.lastTimestamp' | grep -iE 'error|warn|fail|unhealthy' | tail -20",
+    "reasoning": "Root cause: The user-service deployment has a node affinity rule that specifies a non-existent node label, causing pods to remain in Pending state. This results in the service being unavailable.",
+    "fault_category": "Scheduling",
+    "symptoms": [
+      "0/3 nodes are available: 1 node(s) had taints that the pod did not tolerate, 2 node(s) didn",
+      "Events show",
+      "FailedScheduling"
+    ],
+    "context": {
+      "namespace": "test-social-network",
+      "resource_type": "Deployment"
+    },
+    "outcomes": [
+      "Scheduling constraint corrected; pods scheduled successfully",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Verify nodeSelector/affinity labels exist on target nodes before deploy. Use PreferredDuringScheduling unless strict isolation is required. Set accurate resource requests so the scheduler can place pods.",
+    "timestamp": 1777462194.5044081
+  },
+  {
+    "id": "kfrd_aoi_00063",
+    "problem": "Kubernetes Scheduling fault in namespace 'test-social-network'. Your task is to mitigate the issue where the user-service pods are not being scheduled due to incorrect node affinity rules. Affected: Pods like user-service-5b549cc8dc-4wfmd, namespace test-social-network, service user-service, nodes with labels 'kubernetes. Symptoms: 0/3 nodes are available: 1 node(s) had taints that the pod did not tolerate, 2 node(s) didn. Events show. FailedScheduling.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-social-network",
+      "kubectl get deployments -n test-social-network",
+      "kubectl get events -n test-social-network",
+      "kubectl describe deployment user-service -n test-social-network",
+      "kubectl get pod user-service-5b549cc8dc-4wfmd -n test-social-network -o yaml",
+      "kubectl describe pod user-service-5b549cc8dc-4wfmd -n test-social-network"
+    ],
+    "final_solution": "kubectl patch deployment user-service -n test-social-network -p '{\"spec\":{\"template\":{\"spec\":{\"affinity\":null}}}'\nkubectl get pods -n test-social-network\nkubectl get pod user-service-5b549cc8dc-4wfmd -n test-social-network\nkubectl describe pod user-service-5b549cc8dc-4wfmd -n test-social-network\nkubectl logs user-service-5b549cc8dc-4wfmd -n test-social-network\nkubectl get events -n test-social-network",
+    "reasoning": "Root cause: The user-service deployment has a node affinity rule that specifies a non-existent node label, causing pods to remain in Pending state. This results in the service being unavailable.",
+    "fault_category": "Scheduling",
+    "symptoms": [
+      "0/3 nodes are available: 1 node(s) had taints that the pod did not tolerate, 2 node(s) didn",
+      "Events show",
+      "FailedScheduling"
+    ],
+    "context": {
+      "namespace": "test-social-network",
+      "resource_type": "Deployment"
+    },
+    "outcomes": [
+      "Scheduling constraint corrected; pods scheduled successfully",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Verify nodeSelector/affinity labels exist on target nodes before deploy. Use PreferredDuringScheduling unless strict isolation is required. Set accurate resource requests so the scheduler can place pods.",
+    "timestamp": 1777462194.504614
+  },
+  {
+    "id": "kfrd_aoi_00064",
+    "problem": "Kubernetes Scheduling fault in namespace 'test-social-network'. Detect if there are anomalies in the deployment, specifically if pods are failing to schedule due to node affinity rules. Affected: Pods like user-service-5b549cc8dc-4wfmd, namespace test-social-network, service user-service, nodes with labels 'kubernetes. Symptoms: 0/3 nodes are available: 1 node(s) had taints that the pod did not tolerate, 2 node(s) didn. Events show. FailedScheduling.",
+    "attempted_solutions": [
+      "kubectl get pods -n test-social-network -o wide",
+      "kubectl describe pod user-service-5b549cc8dc-4wfmd -n test-social-network",
+      "kubectl get deployments -n test-social-network -o wide",
+      "kubectl get nodes -o wide",
+      "kubectl get deployment user-service -n test-social-network -o yaml",
+      "kubectl logs user-service-5b549cc8dc-4wfmd -n test-social-network --tail=50"
+    ],
+    "final_solution": "kubectl patch deployment user-service -n test-social-network -p '{\"spec\":{\"template\":{\"spec\":{\"nodeSelector\":{\"kubernetes\\.io/hostname\":\"existing-node\"}}}}}'\nkubectl get pods -n test-social-network -o wide\nkubectl describe pod user-service-5b549cc8dc-4wfmd -n test-social-network\nkubectl logs user-service-5b549cc8dc-4wfmd -n test-social-network --tail=50",
+    "reasoning": "Root cause: The user-service deployment has a node affinity rule that specifies a non-existent node label, causing pods to remain in Pending state. This results in the service being unavailable.",
+    "fault_category": "Scheduling",
+    "symptoms": [
+      "0/3 nodes are available: 1 node(s) had taints that the pod did not tolerate, 2 node(s) didn",
+      "Events show",
+      "FailedScheduling"
+    ],
+    "context": {
+      "namespace": "test-social-network",
+      "resource_type": "Deployment"
+    },
+    "outcomes": [
+      "Fault remediated; service restored to healthy state",
+      "No further error events in affected namespace"
+    ],
+    "prevention": "Verify nodeSelector/affinity labels exist on target nodes before deploy. Use PreferredDuringScheduling unless strict isolation is required. Set accurate resource requests so the scheduler can place pods.",
+    "timestamp": 1777462194.5048294
+  }
+]
